@@ -23,29 +23,31 @@ struct NamePromptView: View {
                 .font(Theme.Fonts.title)
                 .foregroundStyle(Theme.Colors.text)
             
-            // Target folder indicator - prominent
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text("Location")
-                    .font(Theme.Fonts.statusBar)
-                    .foregroundStyle(Theme.Colors.textMuted)
-                
-                HStack(spacing: Theme.Spacing.s) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                    Text(targetFolder)
-                        .font(Theme.Fonts.ui)
-                        .foregroundStyle(Theme.Colors.text)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+            // Target folder indicator - prominent (hidden when empty)
+            if !targetFolder.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("Location")
+                        .font(Theme.Fonts.statusBar)
+                        .foregroundStyle(Theme.Colors.textMuted)
+                    
+                    HStack(spacing: Theme.Spacing.s) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                        Text(targetFolder)
+                            .font(Theme.Fonts.ui)
+                            .foregroundStyle(Theme.Colors.text)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .padding(.horizontal, Theme.Spacing.m)
+                    .padding(.vertical, Theme.Spacing.s)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.small)
+                            .fill(Theme.Colors.backgroundSecondary)
+                    )
                 }
-                .padding(.horizontal, Theme.Spacing.m)
-                .padding(.vertical, Theme.Spacing.s)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.small)
-                        .fill(Theme.Colors.backgroundSecondary)
-                )
             }
             
             // Input - clean

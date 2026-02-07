@@ -4,14 +4,13 @@ import AppKit
 // MARK: - Open File Tab
 
 struct OpenFile: Identifiable, Equatable {
-    let id: URL
+    let id = UUID()
     var url: URL
     var content: String
     var isDirty: Bool
     var lastSavedAt: Date?
-    
+
     init(url: URL, content: String = "", isDirty: Bool = false) {
-        self.id = url
         self.url = url
         self.content = content
         self.isDirty = isDirty
@@ -185,6 +184,38 @@ struct FolderCustomization: Codable, Equatable {
     }
 }
 
+// MARK: - Appearance Mode
+
+enum AppearanceMode: String, CaseIterable {
+    case system
+    case light
+    case dark
+
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var next: AppearanceMode {
+        switch self {
+        case .system: return .light
+        case .light: return .dark
+        case .dark: return .system
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 // MARK: - App State
 
 final class AppState: ObservableObject {
@@ -206,7 +237,22 @@ final class AppState: ObservableObject {
     @Published var activeSheet: ActiveSheet? = nil
     @Published var searchQuery: String = ""
     @Published var folderCustomizations: [String: FolderCustomization] = [:]
+    @Published var showCommandPalette: Bool = false
+    @Published var fullTextSearchMode: Bool = false
     @Published var customizingFolderURL: URL? = nil
+    @Published var renamingNodeURL: URL? = nil
+    @Published var appearanceMode: AppearanceMode = .system {
+        didSet {
+            UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
+            applyAppearance()
+        }
+    }
+
+    // Direct reference to NSTextView for undo-safe edits.
+    // Formatting commands apply changes through this instead of
+    // replacing the full text via SwiftUI bindings, which would
+    // destroy the undo stack.
+    weak var editorTextView: NSTextView?
 
     private var autosave = DebouncedAutosave()
     private var directoryMonitor: DirectoryMonitor?
@@ -248,9 +294,28 @@ final class AppState: ObservableObject {
         return rootURL.lastPathComponent + relativePath
     }
 
+    // MARK: - Appearance
+
+    func applyAppearance() {
+        NSApp.appearance = appearanceMode.nsAppearance
+    }
+
+    func cycleAppearance() {
+        appearanceMode = appearanceMode.next
+    }
+
+    func restoreAppearance() {
+        if let raw = UserDefaults.standard.string(forKey: "appearanceMode"),
+           let mode = AppearanceMode(rawValue: raw) {
+            appearanceMode = mode
+        }
+        applyAppearance()
+    }
+
     // MARK: - Root Folder Management
 
     func restoreLastRootIfPossible() {
+        restoreAppearance()
         loadMarkdownDefaults()
         guard rootURL == nil else { return }
         guard let path = UserDefaults.standard.string(forKey: "lastRootPath") else { return }
@@ -397,6 +462,22 @@ final class AppState: ObservableObject {
         }
     }
 
+    func selectPreviousTab() {
+        guard openFiles.count > 1,
+              let activeURL = activeFileURL,
+              let currentIndex = openFiles.firstIndex(where: { $0.url == activeURL }) else { return }
+        let previousIndex = (currentIndex - 1 + openFiles.count) % openFiles.count
+        setActiveFile(openFiles[previousIndex].url)
+    }
+
+    func selectNextTab() {
+        guard openFiles.count > 1,
+              let activeURL = activeFileURL,
+              let currentIndex = openFiles.firstIndex(where: { $0.url == activeURL }) else { return }
+        let nextIndex = (currentIndex + 1) % openFiles.count
+        setActiveFile(openFiles[nextIndex].url)
+    }
+
     // MARK: - Editor Content
     
     private func syncCurrentTextToFile() {
@@ -460,8 +541,36 @@ final class AppState: ObservableObject {
         activeSheet = .newFile
     }
 
+    func createUntitledFile() {
+        guard let targetFolder = currentTargetFolder() else { return }
+        var url = targetFolder.appendingPathComponent("Untitled.md")
+        var counter = 1
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = targetFolder.appendingPathComponent("Untitled \(counter).md")
+            counter += 1
+        }
+        FileManager.default.createFile(atPath: url.path, contents: Data(), attributes: nil)
+        reloadTree(selecting: url)
+    }
+
     func presentNewFolderSheet() {
         activeSheet = .newFolder
+    }
+
+    func createUntitledFolder() {
+        guard let targetFolder = currentTargetFolder() else { return }
+        var url = targetFolder.appendingPathComponent("Untitled Folder")
+        var counter = 1
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = targetFolder.appendingPathComponent("Untitled Folder \(counter)")
+            counter += 1
+        }
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        } catch {
+            print("Failed to create folder: \(error)")
+        }
+        reloadTree(selecting: url)
     }
 
     func presentDeleteConfirm() {
@@ -515,6 +624,109 @@ final class AppState: ObservableObject {
             print("Failed to delete: \(error)")
         }
         reloadTree(selecting: rootURL)
+    }
+
+    func presentRenameSheet() {
+        guard let selectedNodeURL else { return }
+        if selectedNodeURL == rootURL { return }
+        renamingNodeURL = selectedNodeURL
+        activeSheet = .rename
+    }
+
+    func renameNode(to newName: String) {
+        defer { dismissSheet() }
+        guard let url = renamingNodeURL else { return }
+        let cleanName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else { return }
+
+        let isDir = isDirectory(url)
+        let finalName: String
+        if !isDir && !cleanName.lowercased().hasSuffix(".md") {
+            finalName = "\(cleanName).md"
+        } else {
+            finalName = cleanName
+        }
+
+        let parentURL = url.deletingLastPathComponent()
+        let destinationURL = parentURL.appendingPathComponent(finalName)
+
+        // Don't rename to the same name
+        guard destinationURL != url else { return }
+        // Don't overwrite existing items
+        guard !FileManager.default.fileExists(atPath: destinationURL.path) else { return }
+
+        do {
+            try FileManager.default.moveItem(at: url, to: destinationURL)
+
+            // Update open file references
+            let sourcePath = url.path
+            let destinationPath = destinationURL.path
+
+            for i in openFiles.indices {
+                let filePath = openFiles[i].url.path
+                if filePath == sourcePath {
+                    openFiles[i].url = destinationURL
+                } else if filePath.hasPrefix(sourcePath + "/") {
+                    let relativeSuffix = String(filePath.dropFirst(sourcePath.count))
+                    openFiles[i].url = URL(fileURLWithPath: destinationPath + relativeSuffix)
+                }
+            }
+
+            // Update active file URL
+            if let activeURL = activeFileURL {
+                let activePath = activeURL.path
+                if activePath == sourcePath {
+                    activeFileURL = destinationURL
+                } else if activePath.hasPrefix(sourcePath + "/") {
+                    let relativeSuffix = String(activePath.dropFirst(sourcePath.count))
+                    activeFileURL = URL(fileURLWithPath: destinationPath + relativeSuffix)
+                }
+            }
+
+            // Update expanded folder paths and customizations (relative paths)
+            if let srcRel = relativePath(for: url), let dstRel = relativePath(for: destinationURL) {
+                var newExpandedPaths = Set<String>()
+                for path in expandedFolderPaths {
+                    if path == srcRel {
+                        newExpandedPaths.insert(dstRel)
+                    } else if path.hasPrefix(srcRel + "/") {
+                        let suffix = String(path.dropFirst(srcRel.count))
+                        newExpandedPaths.insert(dstRel + suffix)
+                    } else {
+                        newExpandedPaths.insert(path)
+                    }
+                }
+                expandedFolderPaths = newExpandedPaths
+
+                var newCustomizations = [String: FolderCustomization]()
+                for (path, customization) in folderCustomizations {
+                    if path == srcRel {
+                        newCustomizations[dstRel] = customization
+                    } else if path.hasPrefix(srcRel + "/") {
+                        let suffix = String(path.dropFirst(srcRel.count))
+                        newCustomizations[dstRel + suffix] = customization
+                    } else {
+                        newCustomizations[path] = customization
+                    }
+                }
+                folderCustomizations = newCustomizations
+                persistFolderCustomizations()
+            }
+
+            reloadTree(selecting: destinationURL)
+        } catch {
+            print("Failed to rename: \(error)")
+        }
+    }
+    
+    var renameTargetName: String {
+        guard let url = renamingNodeURL else { return "" }
+        return url.lastPathComponent
+    }
+    
+    var renameTargetIsDirectory: Bool {
+        guard let url = renamingNodeURL else { return false }
+        return isDirectory(url)
     }
     
     func moveItem(from sourceURL: URL, to destinationFolderURL: URL) {
@@ -627,6 +839,78 @@ final class AppState: ObservableObject {
             }
         }
         return false
+    }
+
+    // MARK: - Command Palette
+
+    func toggleCommandPalette() {
+        fullTextSearchMode = false
+        showCommandPalette.toggle()
+    }
+
+    func openFullTextSearch() {
+        fullTextSearchMode = true
+        showCommandPalette = true
+    }
+
+    func navigateToLine(_ lineNumber: Int) {
+        let nsText = currentText as NSString
+        var currentLine = 1
+        var lineStart = 0
+        for i in 0..<nsText.length {
+            if currentLine == lineNumber {
+                lineStart = i
+                break
+            }
+            if nsText.character(at: i) == 0x0A { // newline
+                currentLine += 1
+            }
+        }
+        if currentLine < lineNumber {
+            lineStart = nsText.length
+        }
+        let range = NSRange(location: lineStart, length: 0)
+        selectionRange = range
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.editorTextView?.scrollRangeToVisible(range)
+        }
+    }
+
+    func allMarkdownFiles() -> [URL] {
+        guard let root = rootNode else { return [] }
+        var files: [URL] = []
+        collectMarkdownFiles(from: root, into: &files)
+        return files
+    }
+
+    func allFolders() -> [URL] {
+        guard let root = rootNode else { return [] }
+        var folders: [URL] = []
+        collectFolders(from: root, into: &folders)
+        return folders
+    }
+
+    private func collectMarkdownFiles(from node: FileNode, into files: inout [URL]) {
+        if !node.isDirectory {
+            if node.url.pathExtension.lowercased() == "md" {
+                files.append(node.url)
+            }
+            return
+        }
+        guard let children = node.children else { return }
+        for child in children {
+            collectMarkdownFiles(from: child, into: &files)
+        }
+    }
+
+    private func collectFolders(from node: FileNode, into folders: inout [URL]) {
+        if node.isDirectory {
+            folders.append(node.url)
+            guard let children = node.children else { return }
+            for child in children {
+                collectFolders(from: child, into: &folders)
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -743,6 +1027,27 @@ final class AppState: ObservableObject {
         currentMatchIndex = (currentMatchIndex - 1 + matchCount) % matchCount
     }
 
+    // MARK: - Undo-Safe Editing
+
+    /// Apply a targeted edit directly on the NSTextView so that the undo
+    /// manager records only the specific range change (not a full-text
+    /// replacement). Falls back to direct text manipulation when the
+    /// NSTextView reference is unavailable.
+    private func applyEdit(range: NSRange, replacement: String, newSelection: NSRange) {
+        if let textView = editorTextView {
+            if textView.shouldChangeText(in: range, replacementString: replacement) {
+                textView.textStorage?.replaceCharacters(in: range, with: replacement)
+                textView.didChangeText()
+            }
+            textView.setSelectedRange(newSelection)
+        } else {
+            let nsText = currentText as NSString
+            let result = nsText.replacingCharacters(in: range, with: replacement)
+            updateText(result)
+            selectionRange = newSelection
+        }
+    }
+
     // MARK: - Inline Formatting
 
     /// Toggle wrapping of the selected text with the given marker (e.g. "**", "*", "`", "~~").
@@ -765,24 +1070,19 @@ final class AppState: ObservableObject {
             if let b = before, let a = after,
                nsText.substring(with: b) == marker,
                nsText.substring(with: a) == marker {
-                // Remove markers
-                var result = nsText.replacingCharacters(in: a, with: "")
-                result = (result as NSString).replacingCharacters(in: b, with: "")
-                updateText(result)
-                selectionRange = NSRange(location: b.location, length: safeSel.length)
+                // Remove markers: replace the full span (before-marker + content + after-marker) with just content
+                let fullRange = NSRange(location: b.location, length: a.location + a.length - b.location)
+                let content = nsText.substring(with: safeSel)
+                applyEdit(range: fullRange, replacement: content, newSelection: NSRange(location: b.location, length: safeSel.length))
             } else {
                 // Wrap selection
                 let selected = nsText.substring(with: safeSel)
                 let wrapped = "\(marker)\(selected)\(marker)"
-                let result = nsText.replacingCharacters(in: safeSel, with: wrapped)
-                updateText(result)
-                selectionRange = NSRange(location: safeSel.location + ml, length: safeSel.length)
+                applyEdit(range: safeSel, replacement: wrapped, newSelection: NSRange(location: safeSel.location + ml, length: safeSel.length))
             }
         } else {
             // No selection -- insert markers and cursor between
-            let result = nsText.replacingCharacters(in: safeSel, with: "\(marker)\(marker)")
-            updateText(result)
-            selectionRange = NSRange(location: loc + ml, length: 0)
+            applyEdit(range: safeSel, replacement: "\(marker)\(marker)", newSelection: NSRange(location: loc + ml, length: 0))
         }
     }
 
@@ -802,16 +1102,11 @@ final class AppState: ObservableObject {
         if safeSel.length > 0 {
             let selected = nsText.substring(with: safeSel)
             let link = "[\(selected)](url)"
-            let result = nsText.replacingCharacters(in: safeSel, with: link)
-            updateText(result)
-            // Select "url" so user can type over it
             let urlStart = safeSel.location + selected.count + 2
-            selectionRange = NSRange(location: urlStart, length: 3)
+            applyEdit(range: safeSel, replacement: link, newSelection: NSRange(location: urlStart, length: 3))
         } else {
             let link = "[](url)"
-            let result = nsText.replacingCharacters(in: safeSel, with: link)
-            updateText(result)
-            selectionRange = NSRange(location: loc + 1, length: 0)
+            applyEdit(range: safeSel, replacement: link, newSelection: NSRange(location: loc + 1, length: 0))
         }
     }
 
@@ -830,18 +1125,15 @@ final class AppState: ObservableObject {
 
         var newLine: String
         if level >= 6 {
-            // Remove heading
             newLine = String(line.drop(while: { $0 == "#" }).drop(while: { $0 == " " }))
         } else if level > 0 {
-            // Increase heading level
             newLine = "#\(line)"
         } else {
-            // Add heading
             newLine = "# \(line)"
         }
 
-        let result = nsText.replacingCharacters(in: lineRange, with: newLine)
-        updateText(result)
+        let contentLength = newLine.hasSuffix("\n") ? newLine.count - 1 : newLine.count
+        applyEdit(range: lineRange, replacement: newLine, newSelection: NSRange(location: lineRange.location + contentLength, length: 0))
     }
 
     /// Set the current line to a specific heading level (1-6), or remove heading if already at that level.
@@ -865,15 +1157,13 @@ final class AppState: ObservableObject {
 
         let newLine: String
         if currentLevel == targetLevel {
-            // Already at this level — remove heading
             newLine = content
         } else {
-            // Set to target level
             newLine = "\(prefix) \(content)"
         }
 
-        let result = nsText.replacingCharacters(in: lineRange, with: newLine)
-        updateText(result)
+        let contentLength = newLine.hasSuffix("\n") ? newLine.count - 1 : newLine.count
+        applyEdit(range: lineRange, replacement: newLine, newSelection: NSRange(location: lineRange.location + contentLength, length: 0))
     }
 
     // MARK: - Checkbox Toggle
@@ -903,8 +1193,30 @@ final class AppState: ObservableObject {
             newLine = "\(leadingWhitespace)- [ ] \(content)"
         }
 
-        let replaced = nsText.replacingCharacters(in: lineRange, with: newLine)
-        updateText(replaced)
+        let contentLength = newLine.hasSuffix("\n") ? newLine.count - 1 : newLine.count
+        applyEdit(range: lineRange, replacement: newLine, newSelection: NSRange(location: lineRange.location + contentLength, length: 0))
+    }
+
+    // MARK: - Code Block
+
+    func insertCodeBlock() {
+        guard activeFileURL != nil else { return }
+        let nsText = currentText as NSString
+        let sel = selectionRange
+        let loc = min(sel.location, nsText.length)
+        let len = min(sel.length, nsText.length - loc)
+        let safeSel = NSRange(location: loc, length: len)
+
+        if safeSel.length > 0 {
+            let selected = nsText.substring(with: safeSel)
+            let wrapped = "```\n\(selected)\n```"
+            applyEdit(range: safeSel, replacement: wrapped, newSelection: NSRange(location: safeSel.location + 3, length: 0))
+        } else {
+            let needsNewline = loc > 0 && nsText.character(at: loc - 1) != 0x0A
+            let prefix = needsNewline ? "\n" : ""
+            let block = "\(prefix)```\n\n```"
+            applyEdit(range: safeSel, replacement: block, newSelection: NSRange(location: loc + prefix.count + 3, length: 0))
+        }
     }
 
     // MARK: - Folder Expansion
@@ -1044,6 +1356,7 @@ enum ActiveSheet: Identifiable {
     case newFile
     case newFolder
     case delete
+    case rename
     case customizeFolder
     case customizeMarkdown
 
@@ -1052,8 +1365,9 @@ enum ActiveSheet: Identifiable {
         case .newFile: return 0
         case .newFolder: return 1
         case .delete: return 2
-        case .customizeFolder: return 3
-        case .customizeMarkdown: return 4
+        case .rename: return 3
+        case .customizeFolder: return 4
+        case .customizeMarkdown: return 5
         }
     }
 }

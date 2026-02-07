@@ -1,57 +1,107 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Theme
 
 enum Theme {
-    // Minimalist dark color palette
+    // Adaptive color palette - resolves based on current appearance
     enum Colors {
-        // Unified background - single tone for flatness
-        static let background = Color(hex: "1a1a1a")
-        static let backgroundSecondary = Color(hex: "1a1a1a")
-        static let backgroundTertiary = Color(hex: "222222")
-        
+        private static func adaptive(dark: String, light: String) -> Color {
+            Color(NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return isDark ? NSColor(Color(hex: dark)) : NSColor(Color(hex: light))
+            })
+        }
+
+        // Unified background
+        static var background: Color { adaptive(dark: "1a1a1a", light: "ffffff") }
+        static var backgroundSecondary: Color { adaptive(dark: "1a1a1a", light: "ffffff") }
+        static var backgroundTertiary: Color { adaptive(dark: "222222", light: "f0f0f0") }
+
         // All panels use same background for seamlessness
-        static let sidebar = background
-        static let editor = background
-        static let tabBar = background
-        static let tabActive = background
-        static let tabInactive = background
-        static let statusBar = background
-        static let inputBackground = Color(hex: "222222")
-        
-        // Text - neutral grays
-        static let text = Color(hex: "d4d4d4")
-        static let textSecondary = Color(hex: "888888")
-        static let textMuted = Color(hex: "555555")
-        static let textDisabled = Color(hex: "404040")
-        
-        // Minimal accent - subtle gray tones only
-        static let accent = Color(hex: "888888")
-        static let accentSecondary = Color(hex: "666666")
-        static let accentGreen = Color(hex: "888888")
-        static let accentOrange = Color(hex: "888888")
-        static let accentRed = Color(hex: "888888")
-        static let accentYellow = Color(hex: "888888")
-        static let accentCyan = Color(hex: "888888")
-        
-        // Ultra-subtle UI elements
-        static let border = Color(hex: "2a2a2a")
-        static let divider = Color(hex: "282828")
-        static let selection = Color.white.opacity(0.06)
-        static let hover = Color.white.opacity(0.03)
-        static let activeRow = Color.white.opacity(0.05)
-        static let textSelection = Color(hex: "444444")
-        
-        // Grayscale folder/file icons
-        static let folder = Color(hex: "666666")
-        static let folderYellow = Color(hex: "666666")
-        static let folderBlue = Color(hex: "666666")
-        
-        // Grayscale file type icons - all same gray
-        static let fileMd = Color(hex: "666666")
-        static let filePy = Color(hex: "666666")
-        static let fileTs = Color(hex: "666666")
-        static let fileDefault = Color(hex: "666666")
+        static var sidebar: Color { background }
+        static var editor: Color { background }
+        static var tabBar: Color { background }
+        static var tabActive: Color { background }
+        static var tabInactive: Color { background }
+        static var statusBar: Color { background }
+        static var inputBackground: Color { adaptive(dark: "222222", light: "f0f0f0") }
+
+        // Text
+        static var text: Color { adaptive(dark: "d4d4d4", light: "1a1a1a") }
+        static var textSecondary: Color { adaptive(dark: "888888", light: "666666") }
+        static var textMuted: Color { adaptive(dark: "555555", light: "999999") }
+        static var textDisabled: Color { adaptive(dark: "404040", light: "bbbbbb") }
+
+        // Minimal accent
+        static var accent: Color { adaptive(dark: "888888", light: "666666") }
+        static var accentSecondary: Color { adaptive(dark: "666666", light: "888888") }
+        static var accentGreen: Color { adaptive(dark: "888888", light: "666666") }
+        static var accentOrange: Color { adaptive(dark: "888888", light: "666666") }
+        static var accentRed: Color { adaptive(dark: "888888", light: "666666") }
+        static var accentYellow: Color { adaptive(dark: "888888", light: "666666") }
+        static var accentCyan: Color { adaptive(dark: "888888", light: "666666") }
+
+        // UI elements
+        static var border: Color { adaptive(dark: "2a2a2a", light: "e0e0e0") }
+        static var divider: Color { adaptive(dark: "282828", light: "e5e5e5") }
+        static var selection: Color {
+            Color(NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return isDark ? NSColor.white.withAlphaComponent(0.06) : NSColor.black.withAlphaComponent(0.06)
+            })
+        }
+        static var hover: Color {
+            Color(NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return isDark ? NSColor.white.withAlphaComponent(0.03) : NSColor.black.withAlphaComponent(0.03)
+            })
+        }
+        static var activeRow: Color {
+            Color(NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return isDark ? NSColor.white.withAlphaComponent(0.05) : NSColor.black.withAlphaComponent(0.05)
+            })
+        }
+        static var textSelection: Color { adaptive(dark: "444444", light: "b4d7ff") }
+
+        // Folder/file icons
+        static var folder: Color { adaptive(dark: "666666", light: "888888") }
+        static var folderYellow: Color { adaptive(dark: "666666", light: "888888") }
+        static var folderBlue: Color { adaptive(dark: "666666", light: "888888") }
+
+        static var fileMd: Color { adaptive(dark: "666666", light: "888888") }
+        static var filePy: Color { adaptive(dark: "666666", light: "888888") }
+        static var fileTs: Color { adaptive(dark: "666666", light: "888888") }
+        static var fileDefault: Color { adaptive(dark: "666666", light: "888888") }
+
+        // Button backgrounds
+        static var buttonBackground: Color { adaptive(dark: "333333", light: "e8e8e8") }
+
+        // Markdown styling colors (for NSTextView)
+        static var mdHeading: Color { adaptive(dark: "e8e8e8", light: "1a1a1a") }
+        static var mdCodeBg: Color { adaptive(dark: "1a1a1a", light: "ffffff") }
+        static var mdCodeText: Color { adaptive(dark: "b0b0b0", light: "555555") }
+        static var mdFenceMuted: Color { adaptive(dark: "4a4a4a", light: "bbbbbb") }
+        static var mdLangTag: Color { adaptive(dark: "6a6a6a", light: "999999") }
+        static var mdInlineCode: Color { adaptive(dark: "a0a0a0", light: "555555") }
+        static var mdInlineCodeBg: Color { adaptive(dark: "222222", light: "f0f0f0") }
+        static var mdLink: Color { adaptive(dark: "6a9fb5", light: "3a7ca5") }
+        static var mdHrLine: Color { adaptive(dark: "333333", light: "cccccc") }
+        static var mdHrStrike: Color { adaptive(dark: "555555", light: "aaaaaa") }
+
+        // Syntax highlighting colors (code blocks)
+        static var syntaxKeyword: Color { adaptive(dark: "c678dd", light: "a626a4") }
+        static var syntaxType: Color { adaptive(dark: "61afef", light: "4078f2") }
+        static var syntaxString: Color { adaptive(dark: "98c379", light: "50a14f") }
+        static var syntaxComment: Color { adaptive(dark: "5c6370", light: "a0a1a7") }
+        static var syntaxNumber: Color { adaptive(dark: "d19a66", light: "986801") }
+        static var syntaxFunc: Color { adaptive(dark: "e5c07b", light: "c18401") }
+        static var syntaxTag: Color { adaptive(dark: "e06c75", light: "e45649") }
+        static var syntaxAttr: Color { adaptive(dark: "d19a66", light: "986801") }
+        static var syntaxProperty: Color { adaptive(dark: "61afef", light: "4078f2") }
+        static var syntaxSelector: Color { adaptive(dark: "e06c75", light: "e45649") }
+        static var syntaxJsonKey: Color { adaptive(dark: "e06c75", light: "e45649") }
     }
     
     enum Fonts {
@@ -148,7 +198,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.vertical, Theme.Spacing.m)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
-                    .fill(configuration.isPressed ? Theme.Colors.backgroundTertiary : Color(hex: "333333"))
+                    .fill(configuration.isPressed ? Theme.Colors.backgroundTertiary : Theme.Colors.buttonBackground)
             )
     }
 }
@@ -176,7 +226,7 @@ struct DestructiveButtonStyle: ButtonStyle {
             .padding(.vertical, Theme.Spacing.m)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
-                    .fill(configuration.isPressed ? Theme.Colors.backgroundTertiary : Color(hex: "333333"))
+                    .fill(configuration.isPressed ? Theme.Colors.backgroundTertiary : Theme.Colors.buttonBackground)
             )
     }
 }

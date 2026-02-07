@@ -24,6 +24,12 @@ struct ContentView: View {
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers: providers)
         }
+        .overlay {
+            if appState.showCommandPalette {
+                CommandPaletteView()
+                    .transition(.opacity)
+            }
+        }
         .sheet(item: $appState.activeSheet) { sheet in
             switch sheet {
             case .newFile:
@@ -50,6 +56,22 @@ struct ContentView: View {
                         appState.createFolder(named: name)
                     }
                 )
+            case .rename:
+                if let renamingURL = appState.renamingNodeURL {
+                    NamePromptView(
+                        title: appState.renameTargetIsDirectory ? "Rename Folder" : "Rename File",
+                        placeholder: renamingURL.lastPathComponent,
+                        confirmTitle: "Rename",
+                        initialValue: appState.renameTargetIsDirectory
+                            ? renamingURL.lastPathComponent
+                            : renamingURL.deletingPathExtension().lastPathComponent,
+                        targetFolder: "",
+                        onCancel: { appState.dismissSheet() },
+                        onConfirm: { name in
+                            appState.renameNode(to: name)
+                        }
+                    )
+                }
             case .delete:
                 DeleteConfirmView(
                     name: appState.deleteTargetName,
@@ -198,20 +220,50 @@ private struct MainEditorView: View {
 
 private struct TabBarView: View {
     @EnvironmentObject private var appState: AppState
-    
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Spacing.xs) {
                 ForEach(appState.openFiles) { file in
                     TabItemView(file: file)
                 }
-                
-                Spacer()
             }
             .padding(.horizontal, Theme.Spacing.m)
+            .background(ScrollWheelRedirector())
         }
         .frame(height: Theme.Size.tabBarHeight)
         .background(Theme.Colors.tabBar)
+    }
+}
+
+/// Converts vertical scroll-wheel events into horizontal scrolling for the
+/// enclosing NSScrollView. Placed inside the ScrollView content so that
+/// `enclosingScrollView` resolves to the correct scroll view.
+private struct ScrollWheelRedirector: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        ScrollWheelInterceptorView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private class ScrollWheelInterceptorView: NSView {
+        override func scrollWheel(with event: NSEvent) {
+            guard abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+                  let scrollView = enclosingScrollView,
+                  let documentView = scrollView.documentView else {
+                super.scrollWheel(with: event)
+                return
+            }
+
+            let clipView = scrollView.contentView
+            let maxX = max(0, documentView.frame.width - clipView.bounds.width)
+            var origin = clipView.bounds.origin
+            origin.x -= event.scrollingDeltaY
+            origin.x = max(0, min(origin.x, maxX))
+
+            clipView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(clipView)
+        }
     }
 }
 
@@ -220,6 +272,9 @@ private struct TabItemView: View {
     let file: OpenFile
     
     @State private var isHovering = false
+    @State private var isRenaming = false
+    @State private var renameText = ""
+    @FocusState private var isRenameFocused: Bool
     
     private var isActive: Bool {
         appState.activeFileURL == file.url
@@ -227,31 +282,47 @@ private struct TabItemView: View {
     
     var body: some View {
         HStack(spacing: Theme.Spacing.xs) {
-            // File name only - no icon for cleaner look
-            Text(file.url.lastPathComponent)
-                .font(Theme.Fonts.tab)
-                .foregroundStyle(isActive ? Theme.Colors.text : Theme.Colors.textMuted)
-                .lineLimit(1)
+            if isRenaming {
+                TextField("", text: $renameText)
+                    .textFieldStyle(.plain)
+                    .font(Theme.Fonts.tab)
+                    .foregroundStyle(Theme.Colors.text)
+                    .focused($isRenameFocused)
+                    .frame(minWidth: 60)
+                    .fixedSize()
+                    .onSubmit { commitRename() }
+                    .onExitCommand { cancelRename() }
+                    .onChange(of: isRenameFocused) { focused in
+                        if !focused { commitRename() }
+                    }
+            } else {
+                Text(file.url.lastPathComponent)
+                    .font(Theme.Fonts.tab)
+                    .foregroundStyle(isActive ? Theme.Colors.text : Theme.Colors.textMuted)
+                    .lineLimit(1)
+            }
             
             // Dirty indicator or close button
-            Button {
-                appState.closeFile(at: file.url)
-            } label: {
-                ZStack {
-                    if file.isDirty && !isHovering {
-                        Circle()
-                            .fill(Theme.Colors.textMuted)
-                            .frame(width: 5, height: 5)
-                    } else {
-                        Image(systemName: "xmark")
-                            .font(Theme.Fonts.disclosure)
-                            .foregroundStyle(Theme.Colors.textMuted)
+            if !isRenaming {
+                Button {
+                    appState.closeFile(at: file.url)
+                } label: {
+                    ZStack {
+                        if file.isDirty && !isHovering {
+                            Circle()
+                                .fill(Theme.Colors.textMuted)
+                                .frame(width: 5, height: 5)
+                        } else {
+                            Image(systemName: "xmark")
+                                .font(Theme.Fonts.disclosure)
+                                .foregroundStyle(Theme.Colors.textMuted)
+                        }
                     }
+                    .frame(width: 12, height: 12)
                 }
-                .frame(width: 12, height: 12)
+                .buttonStyle(.plain)
+                .opacity(isHovering || file.isDirty ? 1 : 0)
             }
-            .buttonStyle(.plain)
-            .opacity(isHovering || file.isDirty ? 1 : 0)
         }
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.vertical, Theme.Spacing.s)
@@ -260,6 +331,9 @@ private struct TabItemView: View {
                 .fill(isActive ? Theme.Colors.selection : (isHovering ? Theme.Colors.hover : Color.clear))
         )
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            startRenaming()
+        }
         .onTapGesture {
             appState.setActiveFile(file.url)
         }
@@ -276,7 +350,34 @@ private struct TabItemView: View {
             Button("Close All") {
                 appState.closeAllFiles()
             }
+            Divider()
+            Button("Rename") {
+                startRenaming()
+            }
         }
+    }
+    
+    private func startRenaming() {
+        renameText = file.url.deletingPathExtension().lastPathComponent
+        isRenaming = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            isRenameFocused = true
+        }
+    }
+    
+    private func commitRename() {
+        guard isRenaming else { return }
+        isRenaming = false
+        isRenameFocused = false
+        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        appState.renamingNodeURL = file.url
+        appState.renameNode(to: trimmed)
+    }
+    
+    private func cancelRename() {
+        isRenaming = false
+        isRenameFocused = false
     }
 }
 

@@ -56,11 +56,11 @@ private struct SidebarHeader: View {
                 // Action buttons - subtle
                 HStack(spacing: 0) {
                     IconButton(icon: "plus", tooltip: "New File") {
-                        appState.presentNewFileSheet()
+                        appState.createUntitledFile()
                     }
-                    
+
                     IconButton(icon: "folder", tooltip: "New Folder") {
-                        appState.presentNewFolderSheet()
+                        appState.createUntitledFolder()
                     }
                 }
             }
@@ -309,6 +309,13 @@ private struct FileRowView: View {
         }
         
         Divider()
+        
+        Button {
+            appState.setSelectedNode(node.url)
+            appState.presentRenameSheet()
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
         
         if node.isDirectory {
             Button {

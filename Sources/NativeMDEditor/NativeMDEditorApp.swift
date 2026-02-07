@@ -46,12 +46,12 @@ struct NativeMDEditorApp: App {
 
             CommandGroup(after: .textFormatting) {
                 Button("New Markdown File") {
-                    appState.presentNewFileSheet()
+                    appState.createUntitledFile()
                 }
                 .keyboardShortcut("n", modifiers: [.command])
 
                 Button("New Folder") {
-                    appState.presentNewFolderSheet()
+                    appState.createUntitledFolder()
                 }
                 .keyboardShortcut("N", modifiers: [.command, .shift])
 
@@ -84,6 +84,12 @@ struct NativeMDEditorApp: App {
                     appState.toggleCode()
                 }
                 .keyboardShortcut("e", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Code Block") {
+                    appState.insertCodeBlock()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(appState.activeFileURL == nil)
 
                 Button("Strikethrough") {
@@ -129,8 +135,8 @@ struct NativeMDEditorApp: App {
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
 
-                Button("Distraction-Free Mode") {
-                    appState.isDistractionFree.toggle()
+                Button("Search All Files") {
+                    appState.openFullTextSearch()
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }
@@ -164,8 +170,29 @@ struct NativeMDEditorApp: App {
                 .keyboardShortcut("/", modifiers: [.command])
             }
             
-            // Zoom commands
+            // Tab navigation & Zoom commands
             CommandGroup(after: .toolbar) {
+                Button("Command Palette") {
+                    appState.toggleCommandPalette()
+                }
+                .keyboardShortcut("p", modifiers: [.command])
+
+                Divider()
+
+                Button("Show Previous Tab") {
+                    appState.selectPreviousTab()
+                }
+                .keyboardShortcut("{", modifiers: [.command])
+                .disabled(appState.openFiles.count < 2)
+
+                Button("Show Next Tab") {
+                    appState.selectNextTab()
+                }
+                .keyboardShortcut("}", modifiers: [.command])
+                .disabled(appState.openFiles.count < 2)
+
+                Divider()
+
                 Button("Zoom In") {
                     appState.zoomIn()
                 }
@@ -180,6 +207,13 @@ struct NativeMDEditorApp: App {
                     appState.resetZoom()
                 }
                 .keyboardShortcut("0", modifiers: [.command])
+
+                Divider()
+
+                Button("Appearance: \(appState.appearanceMode.label)") {
+                    appState.cycleAppearance()
+                }
+                .keyboardShortcut("t", modifiers: [.command])
             }
         }
     }
