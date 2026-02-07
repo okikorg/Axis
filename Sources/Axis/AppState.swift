@@ -241,7 +241,7 @@ final class AppState: ObservableObject {
     @Published var fullTextSearchMode: Bool = false
     @Published var customizingFolderURL: URL? = nil
     @Published var renamingNodeURL: URL? = nil
-    @Published var appearanceMode: AppearanceMode = .system {
+    @Published var appearanceMode: AppearanceMode = .light {
         didSet {
             UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
             applyAppearance()

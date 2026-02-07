@@ -1,11 +1,11 @@
-# Native Markdown Editor (macOS)
+# Axis (macOS)
 
 Minimal, native macOS markdown editor built with SwiftUI and zero external dependencies. It opens a folder, shows a right-side file tree, and edits only `.md` files.
 
 ## Build & Run
 
 1. Open `Package.swift` in Xcode.
-2. Select the `NativeMDEditor` scheme.
+2. Select the `Axis` scheme.
 3. Run.
 
 ### Build a .app Bundle
@@ -14,7 +14,7 @@ Minimal, native macOS markdown editor built with SwiftUI and zero external depen
 scripts/build_app.sh
 ```
 
-The app bundle will be at `dist/NativeMDEditor.app`.
+The app bundle will be at `dist/Axis.app`.
 
 ## Keyboard Shortcuts
 

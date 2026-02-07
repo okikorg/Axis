@@ -1,9 +1,31 @@
 import SwiftUI
 import AppKit
+import CoreText
 
 @main
-struct NativeMDEditorApp: App {
+struct AxisApp: App {
     @StateObject private var appState = AppState()
+
+    init() {
+        Self.registerBundledFonts()
+    }
+
+    private static func registerBundledFonts() {
+        let fontNames = [
+            "RobotoMono-Regular",
+            "RobotoMono-Medium",
+            "RobotoMono-Bold",
+            "RobotoMono-Italic",
+            "RobotoMono-BoldItalic",
+            "RobotoMono-Light"
+        ]
+        for name in fontNames {
+            guard let url = Bundle.module.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts") else {
+                continue
+            }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+    }
 
     var body: some Scene {
         WindowGroup {

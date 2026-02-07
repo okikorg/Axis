@@ -156,7 +156,7 @@ private struct EmptyEditorView: View {
                 ForEach(shortcuts, id: \.key) { shortcut in
                     HStack(spacing: Theme.Spacing.l) {
                         Text(shortcut.key)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.custom("RobotoMono-Medium", size: 11))
                             .foregroundStyle(Theme.Colors.textMuted)
                             .frame(width: 72, alignment: .trailing)
                         
@@ -401,7 +401,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         guard let storage = textView.textStorage else { return }
 
         let baseSize = 14.0 * zoomLevel
-        let baseFont = NSFont.monospacedSystemFont(ofSize: baseSize, weight: .regular)
+        let baseFont = RobotoMono.regular(size: baseSize)
         let textColor = NSColor(Theme.Colors.text)
         let mutedColor = NSColor(Theme.Colors.textMuted)
         let secondaryColor = NSColor(Theme.Colors.textSecondary)
@@ -472,7 +472,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let level = min(hashRange.length, 6) - 1
             let size = baseSize * headingSizes[level]
             let weight = headingWeights[level]
-            let headingFont = NSFont.systemFont(ofSize: size, weight: weight)
+            let headingFont = weight == .bold ? RobotoMono.bold(size: size) : RobotoMono.medium(size: size)
             // Dim the hash marks
             storage.addAttribute(.foregroundColor, value: mutedColor, range: hashRange)
             // Style the heading content
@@ -487,7 +487,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let blockRange = match.range(at: 1)
             let langRange = match.range(at: 2)
             let codeRange = match.range(at: 3)
-            let codeFont = NSFont.monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular)
+            let codeFont = RobotoMono.regular(size: baseSize * 0.9)
             let codeBg = NSColor(Theme.Colors.mdCodeBg)
 
             // Base styling for entire block
@@ -526,7 +526,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange1 = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
-            let font = NSFont.systemFont(ofSize: baseSize, weight: .bold).withTraits(.italic)
+            let font = RobotoMono.boldItalic(size: baseSize)
             storage.addAttribute(.font, value: font, range: contentRange)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
@@ -537,7 +537,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange1 = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
-            let boldFont = NSFont.systemFont(ofSize: baseSize, weight: .bold)
+            let boldFont = RobotoMono.bold(size: baseSize)
             storage.addAttribute(.font, value: boldFont, range: contentRange)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
@@ -548,7 +548,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange1 = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
-            let italicFont = NSFont.systemFont(ofSize: baseSize, weight: .regular).withTraits(.italic)
+            let italicFont = RobotoMono.italic(size: baseSize)
             storage.addAttribute(.font, value: italicFont, range: contentRange)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
@@ -570,7 +570,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let open = match.range(at: 1)
             let content = match.range(at: 2)
             let close = match.range(at: 3)
-            let codeFont = NSFont.monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular)
+            let codeFont = RobotoMono.regular(size: baseSize * 0.9)
             storage.addAttributes([
                 .font: codeFont,
                 .foregroundColor: NSColor(Theme.Colors.mdInlineCode),
@@ -584,7 +584,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         applyLinePattern(storage: storage, nsText: nsText, pattern: "^(>+)\\s?(.*)$") { match in
             let markerRange = match.range(at: 1)
             let contentRange = match.range(at: 2)
-            let quoteFont = NSFont.systemFont(ofSize: baseSize, weight: .regular).withTraits(.italic)
+            let quoteFont = RobotoMono.italic(size: baseSize)
             storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange)
             storage.addAttributes([
                 .font: quoteFont,
@@ -688,7 +688,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
     private func applySyntaxHighlighting(storage: NSTextStorage, nsText: NSString, codeRange: NSRange, language: String, baseSize: CGFloat) {
         let codeString = nsText.substring(with: codeRange) as NSString
         let offset = codeRange.location
-        let boldCodeFont = NSFont.monospacedSystemFont(ofSize: baseSize * 0.9, weight: .semibold)
+        let boldCodeFont = RobotoMono.bold(size: baseSize * 0.9)
 
         // Token colors
         let keywordColor = NSColor(Theme.Colors.syntaxKeyword)
@@ -1393,6 +1393,26 @@ private struct HighlightingTextEditor: NSViewRepresentable {
 
         func textView(_ textView: NSTextView, shouldChangeTextIn affectedRange: NSRange, replacementString: String?) -> Bool {
             guard let pasted = replacementString else { return true }
+
+            // [] checkbox shortcut: typing ']' right after '[' at line start
+            if pasted == "]" && affectedRange.length == 0 {
+                let nsText = textView.string as NSString
+                let loc = affectedRange.location
+                if loc > 0 && nsText.character(at: loc - 1) == 0x5B /* '[' */ {
+                    let lineRange = nsText.lineRange(for: NSRange(location: loc, length: 0))
+                    let prefixLen = loc - 1 - lineRange.location
+                    let prefix = prefixLen > 0
+                        ? nsText.substring(with: NSRange(location: lineRange.location, length: prefixLen))
+                        : ""
+                    if prefix.allSatisfy({ $0 == " " || $0 == "\t" }) {
+                        // Replace the '[' with '- [ ] '
+                        let bracketRange = NSRange(location: loc - 1, length: 1)
+                        textView.insertText("- [ ] ", replacementRange: bracketRange)
+                        return false
+                    }
+                }
+            }
+
             // Only intercept paste (multi-char replacement or insertion)
             guard pasted.count > 1 else { return true }
             let trimmed = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1500,7 +1520,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
 
             // Position ghost label at cursor
             let baseSize = 14.0 * parent.zoomLevel
-            ghostLabel.font = NSFont.monospacedSystemFont(ofSize: baseSize, weight: .regular)
+            ghostLabel.font = RobotoMono.regular(size: baseSize)
             ghostLabel.stringValue = remaining
 
             let point = cursorPoint(in: textView)
@@ -1565,7 +1585,28 @@ private struct HighlightingTextEditor: NSViewRepresentable {
     }
 }
 
-// MARK: - NSFont Trait Helper
+// MARK: - Roboto Mono NSFont Helpers
+
+private enum RobotoMono {
+    static func regular(size: CGFloat) -> NSFont {
+        NSFont(name: "RobotoMono-Regular", size: size) ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+    static func medium(size: CGFloat) -> NSFont {
+        NSFont(name: "RobotoMono-Medium", size: size) ?? NSFont.monospacedSystemFont(ofSize: size, weight: .medium)
+    }
+    static func bold(size: CGFloat) -> NSFont {
+        NSFont(name: "RobotoMono-Bold", size: size) ?? NSFont.monospacedSystemFont(ofSize: size, weight: .bold)
+    }
+    static func italic(size: CGFloat) -> NSFont {
+        NSFont(name: "RobotoMono-Italic", size: size) ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+    static func boldItalic(size: CGFloat) -> NSFont {
+        NSFont(name: "RobotoMono-BoldItalic", size: size) ?? NSFont.monospacedSystemFont(ofSize: size, weight: .bold)
+    }
+    static func light(size: CGFloat) -> NSFont {
+        NSFont(name: "RobotoMono-Light", size: size) ?? NSFont.monospacedSystemFont(ofSize: size, weight: .light)
+    }
+}
 
 private extension NSFont {
     func withTraits(_ traits: NSFontDescriptor.SymbolicTraits) -> NSFont {

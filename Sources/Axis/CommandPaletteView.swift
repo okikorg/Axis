@@ -401,7 +401,7 @@ struct PaletteSearchField: NSViewRepresentable {
         field.isBordered = false
         field.backgroundColor = .clear
         field.focusRingType = .none
-        field.font = NSFont.systemFont(ofSize: 14)
+        field.font = NSFont(name: "RobotoMono-Regular", size: 14) ?? NSFont.systemFont(ofSize: 14)
         field.delegate = context.coordinator
         field.cell?.sendsActionOnEndEditing = false
 

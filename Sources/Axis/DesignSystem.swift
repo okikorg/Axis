@@ -105,30 +105,48 @@ enum Theme {
     }
     
     enum Fonts {
+        // Roboto Mono font family used throughout the app
+        private static func roboto(size: CGFloat, weight: FontWeight = .regular) -> Font {
+            switch weight {
+            case .light:
+                return Font.custom("RobotoMono-Light", size: size)
+            case .regular:
+                return Font.custom("RobotoMono-Regular", size: size)
+            case .medium:
+                return Font.custom("RobotoMono-Medium", size: size)
+            case .semibold, .bold:
+                return Font.custom("RobotoMono-Bold", size: size)
+            }
+        }
+
+        enum FontWeight {
+            case light, regular, medium, semibold, bold
+        }
+
         // Base UI font - used throughout
-        static let ui = Font.system(size: 13, weight: .regular)
-        static let uiSmall = Font.system(size: 12, weight: .regular)
-        static let uiMedium = Font.system(size: 13, weight: .medium)
-        static let uiBold = Font.system(size: 13, weight: .semibold)
-        
+        static let ui = roboto(size: 13)
+        static let uiSmall = roboto(size: 12)
+        static let uiMedium = roboto(size: 13, weight: .medium)
+        static let uiBold = roboto(size: 13, weight: .bold)
+
         // Specific UI elements
-        static let title = Font.system(size: 13, weight: .medium)
-        static let sidebarHeader = Font.system(size: 12, weight: .medium)
-        static let tab = Font.system(size: 12, weight: .regular)
-        static let breadcrumb = Font.system(size: 11, weight: .regular)
-        static let statusBar = Font.system(size: 11, weight: .regular)
-        
+        static let title = roboto(size: 13, weight: .medium)
+        static let sidebarHeader = roboto(size: 12, weight: .medium)
+        static let tab = roboto(size: 12)
+        static let breadcrumb = roboto(size: 11)
+        static let statusBar = roboto(size: 11)
+
         // Icons and small elements
         static let icon = Font.system(size: 11, weight: .regular)
         static let iconSmall = Font.system(size: 9, weight: .medium)
         static let disclosure = Font.system(size: 8, weight: .medium)
-        
+
         // Welcome screen
         static let welcomeIcon = Font.system(size: 36, weight: .thin)
-        static let welcomeTitle = Font.system(size: 18, weight: .medium)
-        
+        static let welcomeTitle = roboto(size: 18, weight: .medium)
+
         // Editor
-        static let editor = Font.system(size: 14, weight: .regular, design: .monospaced)
+        static let editor = roboto(size: 14)
     }
     
     enum Spacing {
@@ -252,16 +270,16 @@ enum Design {
     }
     
     enum Fonts {
-        static let largeTitle = Font.system(size: 28, weight: .bold, design: .rounded)
-        static let title = Font.system(size: 20, weight: .semibold, design: .rounded)
-        static let headline = Font.system(size: 14, weight: .semibold)
-        static let subheadline = Font.system(size: 13, weight: .medium)
-        static let body = Font.system(size: 13)
-        static let caption = Font.system(size: 11)
-        static let tiny = Font.system(size: 10)
-        static let editorMono = Font.system(size: 14, weight: .regular, design: .monospaced)
-        static let sidebarItem = Font.system(size: 13)
-        static let sidebarHeader = Font.system(size: 11, weight: .semibold)
+        static let largeTitle = Font.custom("RobotoMono-Bold", size: 28)
+        static let title = Font.custom("RobotoMono-Bold", size: 20)
+        static let headline = Font.custom("RobotoMono-Bold", size: 14)
+        static let subheadline = Font.custom("RobotoMono-Medium", size: 13)
+        static let body = Font.custom("RobotoMono-Regular", size: 13)
+        static let caption = Font.custom("RobotoMono-Regular", size: 11)
+        static let tiny = Font.custom("RobotoMono-Regular", size: 10)
+        static let editorMono = Font.custom("RobotoMono-Regular", size: 14)
+        static let sidebarItem = Font.custom("RobotoMono-Regular", size: 13)
+        static let sidebarHeader = Font.custom("RobotoMono-Bold", size: 11)
     }
     
     enum Colors {

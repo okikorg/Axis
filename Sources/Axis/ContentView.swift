@@ -420,6 +420,7 @@ private struct BreadcrumbView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(Theme.Colors.textMuted)
+                        .padding(.horizontal, Theme.Spacing.xs)
                 }
                 
                 BreadcrumbItemView(item: item)
@@ -456,7 +457,7 @@ private struct BreadcrumbItemView: View {
     }
     
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: Theme.Spacing.xs) {
             Image(systemName: icon)
                 .font(.system(size: 10))
                 .foregroundStyle(iconColor)

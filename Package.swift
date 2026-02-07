@@ -2,19 +2,22 @@
 import PackageDescription
 
 let package = Package(
-    name: "NativeMDEditor",
+    name: "Axis",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "NativeMDEditor", targets: ["NativeMDEditor"]) 
+        .executable(name: "Axis", targets: ["Axis"]) 
     ],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "NativeMDEditor",
+            name: "Axis",
             dependencies: [],
-            path: "Sources/NativeMDEditor"
+            path: "Sources/Axis",
+            resources: [
+                .copy("Resources/Fonts")
+            ]
         )
     ]
 )

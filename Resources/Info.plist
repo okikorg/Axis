@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>NativeMDEditor</string>
+    <string>Axis</string>
     <key>CFBundleDisplayName</key>
-    <string>NativeMDEditor</string>
+    <string>Axis</string>
     <key>CFBundleIdentifier</key>
-    <string>com.local.NativeMDEditor</string>
+    <string>com.local.Axis</string>
     <key>CFBundleExecutable</key>
-    <string>NativeMDEditor</string>
+    <string>Axis</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
