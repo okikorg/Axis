@@ -1,7 +1,9 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var isDropTargeted = false
 
     var body: some View {
         Group {
@@ -13,6 +15,15 @@ struct ContentView: View {
         }
         .frame(minWidth: 600, minHeight: 400)
         .background(Theme.Colors.background)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Theme.Colors.textMuted, lineWidth: 2)
+                .opacity(isDropTargeted ? 1 : 0)
+                .padding(4)
+        )
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers: providers)
+        }
         .sheet(item: $appState.activeSheet) { sheet in
             switch sheet {
             case .newFile:
@@ -21,6 +32,7 @@ struct ContentView: View {
                     placeholder: "Notes.md",
                     confirmTitle: "Create",
                     initialValue: "",
+                    targetFolder: appState.targetFolderPath,
                     onCancel: { appState.dismissSheet() },
                     onConfirm: { name in
                         appState.createMarkdownFile(named: name)
@@ -32,6 +44,7 @@ struct ContentView: View {
                     placeholder: "Docs",
                     confirmTitle: "Create",
                     initialValue: "",
+                    targetFolder: appState.targetFolderPath,
                     onCancel: { appState.dismissSheet() },
                     onConfirm: { name in
                         appState.createFolder(named: name)
@@ -43,11 +56,48 @@ struct ContentView: View {
                     onCancel: { appState.dismissSheet() },
                     onConfirm: { appState.deleteSelectedNode() }
                 )
+            case .customizeFolder:
+                if let folderURL = appState.customizingFolderURL {
+                    FolderCustomizationView(
+                        folderName: folderURL.lastPathComponent,
+                        currentCustomization: appState.folderCustomization(for: folderURL),
+                        onCancel: { appState.dismissSheet() },
+                        onConfirm: { customization in
+                            appState.setFolderCustomization(customization, for: folderURL)
+                            appState.dismissSheet()
+                        }
+                    )
+                }
+            case .customizeMarkdown:
+                MarkdownCustomizationView(
+                    currentDefaults: appState.markdownDefaults,
+                    onCancel: { appState.dismissSheet() },
+                    onConfirm: { defaults in
+                        appState.setMarkdownDefaults(defaults)
+                        appState.dismissSheet()
+                    }
+                )
             }
         }
         .onAppear {
             appState.restoreLastRootIfPossible()
         }
+    }
+    
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async {
+                        _ = appState.handleDroppedURLs([url])
+                    }
+                }
+                return true
+            }
+        }
+        return false
     }
 }
 
@@ -232,35 +282,46 @@ private struct TabItemView: View {
 
 // MARK: - Breadcrumb
 
+private struct BreadcrumbItem: Identifiable {
+    let id: Int
+    let name: String
+    let url: URL
+    let isFile: Bool
+}
+
 private struct BreadcrumbView: View {
     @EnvironmentObject private var appState: AppState
     
-    private var pathComponents: [String] {
+    private var breadcrumbItems: [BreadcrumbItem] {
         guard let root = appState.rootURL,
               let active = appState.activeFileURL else { return [] }
         
+        var items: [BreadcrumbItem] = []
+        var currentURL = root
+        
         let relativePath = active.path.replacingOccurrences(of: root.path, with: "")
-        return relativePath.split(separator: "/").map(String.init)
+        let components = relativePath.split(separator: "/").map(String.init)
+        
+        for (index, component) in components.enumerated() {
+            currentURL = currentURL.appendingPathComponent(component)
+            let isFile = index == components.count - 1
+            items.append(BreadcrumbItem(id: index, name: component, url: currentURL, isFile: isFile))
+        }
+        
+        return items
     }
     
     var body: some View {
         HStack(spacing: Theme.Spacing.xxs) {
-            // Path as single text with separators
-            ForEach(Array(pathComponents.enumerated()), id: \.offset) { index, component in
-                if index > 0 {
+            // Path with separators
+            ForEach(breadcrumbItems) { item in
+                if item.id > 0 {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(Theme.Colors.textMuted)
                 }
                 
-                let isFile = index == pathComponents.count - 1
-                Image(systemName: isFile ? "doc.text" : "folder")
-                    .font(.system(size: 10))
-                    .foregroundStyle(isFile ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
-                
-                Text(component)
-                    .font(Theme.Fonts.statusBar)
-                    .foregroundStyle(isFile ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
+                BreadcrumbItemView(item: item)
             }
             
             Spacer()
@@ -279,6 +340,41 @@ private struct BreadcrumbView: View {
         .padding(.horizontal, Theme.Spacing.xl)
         .frame(height: 24)
         .background(Theme.Colors.background)
+    }
+}
+
+private struct BreadcrumbItemView: View {
+    @EnvironmentObject private var appState: AppState
+    let item: BreadcrumbItem
+    
+    private var icon: String {
+        if item.isFile {
+            return appState.markdownDefaults.icon
+        } else {
+            let customization = appState.folderCustomization(for: item.url)
+            return customization.icon
+        }
+    }
+    
+    private var iconColor: Color {
+        if item.isFile {
+            return appState.markdownDefaults.color
+        } else {
+            let customization = appState.folderCustomization(for: item.url)
+            return customization.color
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundStyle(iconColor)
+            
+            Text(item.name)
+                .font(Theme.Fonts.statusBar)
+                .foregroundStyle(item.isFile ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
+        }
     }
 }
 

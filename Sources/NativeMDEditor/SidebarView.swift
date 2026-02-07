@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @EnvironmentObject private var appState: AppState
@@ -161,6 +162,7 @@ private struct FileRowView: View {
     let depth: Int
     
     @State private var isHovering = false
+    @State private var isDropTargeted = false
     
     private var isSelected: Bool {
         appState.selectedNodeURL == node.url
@@ -174,12 +176,28 @@ private struct FileRowView: View {
         appState.isExpanded(node.url) ? "chevron.down" : "chevron.right"
     }
     
+    private var folderCustomization: FolderCustomization {
+        appState.folderCustomization(for: node.url)
+    }
+    
     private var nodeIcon: String {
         if node.isDirectory {
-            return appState.isExpanded(node.url) ? "folder.fill" : "folder"
+            let customization = folderCustomization
+            if appState.isExpanded(node.url) {
+                return customization.expandedIcon
+            } else {
+                return customization.icon
+            }
         } else {
-            return "doc.text"
+            return appState.markdownDefaults.icon
         }
+    }
+    
+    private var nodeColor: Color {
+        if node.isDirectory {
+            return folderCustomization.color
+        }
+        return appState.markdownDefaults.color
     }
     
     var body: some View {
@@ -201,7 +219,7 @@ private struct FileRowView: View {
             // Icon
             Image(systemName: nodeIcon)
                 .font(Theme.Fonts.icon)
-                .foregroundStyle(Theme.Colors.folder)
+                .foregroundStyle(nodeColor)
                 .frame(width: 14)
             
             // Name
@@ -215,6 +233,11 @@ private struct FileRowView: View {
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.vertical, Theme.Spacing.xs)
         .background(backgroundColor)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Theme.Colors.textMuted, lineWidth: 1)
+                .opacity(isDropTargeted && node.isDirectory ? 1 : 0)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             handleTap()
@@ -223,12 +246,38 @@ private struct FileRowView: View {
         .contextMenu {
             contextMenuItems
         }
+        // Drag source
+        .draggable(node.url) {
+            HStack(spacing: Theme.Spacing.s) {
+                Image(systemName: nodeIcon)
+                    .font(Theme.Fonts.icon)
+                    .foregroundStyle(nodeColor)
+                Text(node.name)
+                    .font(Theme.Fonts.uiSmall)
+                    .foregroundStyle(Theme.Colors.text)
+            }
+            .padding(.horizontal, Theme.Spacing.m)
+            .padding(.vertical, Theme.Spacing.s)
+            .background(Theme.Colors.backgroundSecondary)
+            .cornerRadius(6)
+        }
+        // Drop target (only for folders)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard node.isDirectory, let sourceURL = urls.first else { return false }
+            // Don't drop onto itself or parent
+            if sourceURL == node.url { return false }
+            if node.url.path.hasPrefix(sourceURL.path + "/") { return false }
+            appState.moveItem(from: sourceURL, to: node.url)
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
     }
     
     private var backgroundColor: Color {
         if isActive {
             return Theme.Colors.selection
-        } else if isHovering {
+        } else if isHovering || isDropTargeted {
             return Theme.Colors.hover
         }
         return Color.clear
@@ -257,6 +306,22 @@ private struct FileRowView: View {
             appState.presentNewFolderSheet()
         } label: {
             Label("New Folder", systemImage: "folder")
+        }
+        
+        Divider()
+        
+        if node.isDirectory {
+            Button {
+                appState.presentFolderCustomization(for: node.url)
+            } label: {
+                Label("Customize Folder...", systemImage: "paintpalette")
+            }
+        } else {
+            Button {
+                appState.presentMarkdownCustomization()
+            } label: {
+                Label("Customize Markdown Files...", systemImage: "paintpalette")
+            }
         }
         
         Divider()

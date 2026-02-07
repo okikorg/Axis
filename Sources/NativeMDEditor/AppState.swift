@@ -19,6 +19,172 @@ struct OpenFile: Identifiable, Equatable {
     }
 }
 
+// MARK: - Customization Colors
+
+struct CustomizationColors {
+    static let available: [(name: String, color: Color)] = [
+        ("default", Color(hex: "666666")),
+        ("red", Color.red),
+        ("orange", Color.orange),
+        ("yellow", Color.yellow),
+        ("green", Color.green),
+        ("mint", Color.mint),
+        ("cyan", Color.cyan),
+        ("blue", Color.blue),
+        ("purple", Color.purple),
+        ("pink", Color.pink),
+    ]
+    
+    static func color(for name: String?) -> Color {
+        if let name = name,
+           let found = available.first(where: { $0.name == name }) {
+            return found.color
+        }
+        return available[0].color
+    }
+}
+
+// MARK: - Markdown Defaults
+
+struct MarkdownDefaults: Codable, Equatable {
+    var colorName: String?
+    var iconName: String?
+    
+    static let availableIcons: [String] = [
+        "doc.text",
+        "doc.text.fill",
+        "doc.richtext",
+        "doc.richtext.fill",
+        "doc.plaintext",
+        "doc.plaintext.fill",
+        "note.text",
+        "text.document",
+        "text.document.fill",
+        "newspaper",
+        "newspaper.fill",
+        "book",
+        "book.fill",
+        "text.book.closed",
+        "text.book.closed.fill",
+        "pencil",
+        "square.and.pencil",
+        "highlighter",
+        "text.quote",
+        "text.alignleft",
+        "list.bullet",
+        "list.number",
+        "checkmark.square",
+        "rectangle.and.pencil.and.ellipsis",
+    ]
+    
+    var color: Color {
+        CustomizationColors.color(for: colorName)
+    }
+    
+    var icon: String {
+        iconName ?? "doc.text"
+    }
+}
+
+// MARK: - Folder Customization
+
+struct FolderCustomization: Codable, Equatable {
+    var colorName: String?
+    var iconName: String?
+    
+    static let availableColors = CustomizationColors.available
+    
+    static let availableIcons: [String] = [
+        // Folders
+        "folder",
+        "folder.badge.gear",
+        "folder.badge.person.crop",
+        "folder.badge.plus",
+        // Favorites & Markers
+        "star.fill",
+        "heart.fill",
+        "bookmark.fill",
+        "tag.fill",
+        "flag.fill",
+        "pin.fill",
+        // Nature & Weather
+        "leaf.fill",
+        "flame.fill",
+        "bolt.fill",
+        "snowflake",
+        "drop.fill",
+        "sun.max.fill",
+        "moon.fill",
+        "cloud.fill",
+        // Objects
+        "book.fill",
+        "books.vertical.fill",
+        "doc.text.fill",
+        "newspaper.fill",
+        "photo.fill",
+        "camera.fill",
+        "music.note",
+        "music.note.list",
+        "film.fill",
+        "tv.fill",
+        "gamecontroller.fill",
+        // Tools & Work
+        "hammer.fill",
+        "wrench.and.screwdriver.fill",
+        "gearshape.fill",
+        "briefcase.fill",
+        "cart.fill",
+        "creditcard.fill",
+        // Communication
+        "envelope.fill",
+        "phone.fill",
+        "bubble.left.fill",
+        "bell.fill",
+        // People & Places
+        "person.fill",
+        "person.2.fill",
+        "house.fill",
+        "building.2.fill",
+        "mappin.circle.fill",
+        "globe.americas.fill",
+        // Tech & Science
+        "desktopcomputer",
+        "laptopcomputer",
+        "iphone",
+        "cpu.fill",
+        "network",
+        "wifi",
+        "lock.fill",
+        "key.fill",
+        // Misc
+        "lightbulb.fill",
+        "gift.fill",
+        "graduationcap.fill",
+        "trophy.fill",
+        "medal.fill",
+        "puzzlepiece.fill",
+        "cube.fill",
+        "archivebox.fill",
+        "tray.full.fill",
+        "externaldrive.fill",
+    ]
+    
+    var color: Color {
+        CustomizationColors.color(for: colorName)
+    }
+    
+    var icon: String {
+        iconName ?? "folder"
+    }
+    
+    var expandedIcon: String {
+        if let iconName = iconName, iconName != "folder" {
+            return iconName
+        }
+        return "folder.fill"
+    }
+}
+
 // MARK: - App State
 
 final class AppState: ObservableObject {
@@ -35,9 +201,12 @@ final class AppState: ObservableObject {
     @Published var showSearch: Bool = false
     @Published var editorSearchQuery: String = ""
     @Published var currentMatchIndex: Int = 0
+    @Published var markdownDefaults: MarkdownDefaults = MarkdownDefaults()
     @Published var expandedFolderPaths: Set<String> = []
     @Published var activeSheet: ActiveSheet? = nil
     @Published var searchQuery: String = ""
+    @Published var folderCustomizations: [String: FolderCustomization] = [:]
+    @Published var customizingFolderURL: URL? = nil
 
     private var autosave = DebouncedAutosave()
     private var directoryMonitor: DirectoryMonitor?
@@ -66,10 +235,23 @@ final class AppState: ObservableObject {
         guard let url = selectedNodeURL else { return "" }
         return url.lastPathComponent
     }
+    
+    var targetFolderPath: String {
+        guard let rootURL else { return "" }
+        guard let targetFolder = currentTargetFolder() else { return rootURL.lastPathComponent }
+        
+        // Return relative path from root
+        let relativePath = targetFolder.path.replacingOccurrences(of: rootURL.path, with: "")
+        if relativePath.isEmpty {
+            return rootURL.lastPathComponent
+        }
+        return rootURL.lastPathComponent + relativePath
+    }
 
     // MARK: - Root Folder Management
 
     func restoreLastRootIfPossible() {
+        loadMarkdownDefaults()
         guard rootURL == nil else { return }
         guard let path = UserDefaults.standard.string(forKey: "lastRootPath") else { return }
         let url = URL(fileURLWithPath: path)
@@ -94,6 +276,7 @@ final class AppState: ObservableObject {
         rootURL = url
         UserDefaults.standard.set(url.path, forKey: "lastRootPath")
         loadExpandedFolders(for: url)
+        loadFolderCustomizations(for: url)
         reloadTree(selecting: nil)
         startMonitoringRoot(url)
     }
@@ -333,10 +516,122 @@ final class AppState: ObservableObject {
         }
         reloadTree(selecting: rootURL)
     }
+    
+    func moveItem(from sourceURL: URL, to destinationFolderURL: URL) {
+        guard let rootURL else { return }
+        
+        // Don't move to itself or its children
+        if sourceURL == destinationFolderURL { return }
+        if destinationFolderURL.path.hasPrefix(sourceURL.path + "/") { return }
+        
+        // Ensure destination is within root
+        guard destinationFolderURL.path.hasPrefix(rootURL.path) else { return }
+        
+        let destinationURL = destinationFolderURL.appendingPathComponent(sourceURL.lastPathComponent)
+        
+        // Don't overwrite existing files
+        guard !FileManager.default.fileExists(atPath: destinationURL.path) else { return }
+        
+        do {
+            try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+            
+            // Update open file references - handle both files and folders
+            let sourcePath = sourceURL.path
+            let destinationPath = destinationURL.path
+            
+            for i in openFiles.indices {
+                let filePath = openFiles[i].url.path
+                
+                // Check if this file was the moved item or was inside a moved folder
+                if filePath == sourcePath {
+                    // Direct match - file was moved
+                    openFiles[i].url = destinationURL
+                } else if filePath.hasPrefix(sourcePath + "/") {
+                    // File was inside the moved folder - update its path
+                    let relativePath = String(filePath.dropFirst(sourcePath.count))
+                    let newPath = destinationPath + relativePath
+                    openFiles[i].url = URL(fileURLWithPath: newPath)
+                }
+            }
+            
+            // Update active file URL
+            if let activeURL = activeFileURL {
+                let activePath = activeURL.path
+                if activePath == sourcePath {
+                    activeFileURL = destinationURL
+                } else if activePath.hasPrefix(sourcePath + "/") {
+                    let relativePath = String(activePath.dropFirst(sourcePath.count))
+                    let newPath = destinationPath + relativePath
+                    activeFileURL = URL(fileURLWithPath: newPath)
+                }
+            }
+            
+            // Get relative paths for source and destination
+            let sourceRelPath = relativePath(for: sourceURL)
+            let destRelPath = relativePath(for: destinationURL)
+            
+            // Update expanded folder paths (now using relative paths)
+            if let srcRel = sourceRelPath, let dstRel = destRelPath {
+                var newExpandedPaths = Set<String>()
+                for path in expandedFolderPaths {
+                    if path == srcRel {
+                        newExpandedPaths.insert(dstRel)
+                    } else if path.hasPrefix(srcRel + "/") {
+                        let suffix = String(path.dropFirst(srcRel.count))
+                        newExpandedPaths.insert(dstRel + suffix)
+                    } else {
+                        newExpandedPaths.insert(path)
+                    }
+                }
+                expandedFolderPaths = newExpandedPaths
+                
+                // Update folder customizations
+                var newCustomizations = [String: FolderCustomization]()
+                for (path, customization) in folderCustomizations {
+                    if path == srcRel {
+                        newCustomizations[dstRel] = customization
+                    } else if path.hasPrefix(srcRel + "/") {
+                        let suffix = String(path.dropFirst(srcRel.count))
+                        newCustomizations[dstRel + suffix] = customization
+                    } else {
+                        newCustomizations[path] = customization
+                    }
+                }
+                folderCustomizations = newCustomizations
+                persistFolderCustomizations()
+            }
+            
+            reloadTree(selecting: destinationURL)
+        } catch {
+            print("Failed to move: \(error)")
+        }
+    }
+    
+    func handleDroppedURLs(_ urls: [URL]) -> Bool {
+        for url in urls {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
+            
+            if isDir.boolValue {
+                // Dropped a folder - set as root
+                setRoot(url)
+                return true
+            } else if url.pathExtension.lowercased() == "md" {
+                // Dropped a markdown file - open its parent as root and select the file
+                let parentFolder = url.deletingLastPathComponent()
+                setRoot(parentFolder)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                    self?.setSelectedNode(url)
+                }
+                return true
+            }
+        }
+        return false
+    }
 
     // MARK: - Helpers
 
-    private func currentTargetFolder() -> URL? {
+    func currentTargetFolder() -> URL? {
         guard let rootURL else { return nil }
         guard let selected = selectedNodeURL else { return rootURL }
         if isDirectory(selected) { return selected }
@@ -347,6 +642,19 @@ final class AppState: ObservableObject {
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
         return isDir.boolValue
+    }
+    
+    private func relativePath(for url: URL) -> String? {
+        guard let rootURL else { return nil }
+        let rootPath = rootURL.path
+        let urlPath = url.path
+        
+        if urlPath == rootPath {
+            return "."
+        } else if urlPath.hasPrefix(rootPath + "/") {
+            return String(urlPath.dropFirst(rootPath.count + 1))
+        }
+        return nil
     }
 
     private func startMonitoringRoot(_ url: URL) {
@@ -438,14 +746,16 @@ final class AppState: ObservableObject {
     // MARK: - Folder Expansion
 
     func isExpanded(_ url: URL) -> Bool {
-        expandedFolderPaths.contains(url.path)
+        guard let relPath = relativePath(for: url) else { return false }
+        return expandedFolderPaths.contains(relPath)
     }
 
     func setExpanded(_ url: URL, expanded: Bool) {
+        guard let relPath = relativePath(for: url) else { return }
         if expanded {
-            expandedFolderPaths.insert(url.path)
+            expandedFolderPaths.insert(relPath)
         } else {
-            expandedFolderPaths.remove(url.path)
+            expandedFolderPaths.remove(relPath)
         }
         persistExpandedFolders()
     }
@@ -455,7 +765,8 @@ final class AppState: ObservableObject {
     }
 
     private func expandedFoldersKey(for root: URL) -> String {
-        "expandedFolders:\(root.path)"
+        // Use folder name instead of full path so it's portable
+        "expandedFolders:\(root.lastPathComponent)"
     }
 
     private func loadExpandedFolders(for root: URL) {
@@ -468,6 +779,98 @@ final class AppState: ObservableObject {
         guard let rootURL else { return }
         let key = expandedFoldersKey(for: rootURL)
         UserDefaults.standard.set(Array(expandedFolderPaths), forKey: key)
+        UserDefaults.standard.synchronize()
+    }
+    
+    // MARK: - Folder Customization
+    
+    func folderCustomization(for url: URL) -> FolderCustomization {
+        guard let relPath = relativePath(for: url) else {
+            return FolderCustomization()
+        }
+        return folderCustomizations[relPath] ?? FolderCustomization()
+    }
+    
+    func setFolderCustomization(_ customization: FolderCustomization, for url: URL) {
+        guard let relPath = relativePath(for: url) else { return }
+        folderCustomizations[relPath] = customization
+        persistFolderCustomizations()
+    }
+    
+    func presentFolderCustomization(for url: URL) {
+        customizingFolderURL = url
+        activeSheet = .customizeFolder
+    }
+    
+    private func folderCustomizationsKey(for root: URL) -> String {
+        // Use folder name instead of full path so it's portable
+        "folderCustomizations:\(root.lastPathComponent)"
+    }
+    
+    private func loadFolderCustomizations(for root: URL) {
+        let key = folderCustomizationsKey(for: root)
+        guard let data = UserDefaults.standard.data(forKey: key) else {
+            folderCustomizations = [:]
+            return
+        }
+        do {
+            let decoded = try JSONDecoder().decode([String: FolderCustomization].self, from: data)
+            folderCustomizations = decoded
+        } catch {
+            print("Failed to decode folder customizations: \(error)")
+            folderCustomizations = [:]
+        }
+    }
+    
+    private func persistFolderCustomizations() {
+        guard let rootURL else { return }
+        let key = folderCustomizationsKey(for: rootURL)
+        do {
+            let data = try JSONEncoder().encode(folderCustomizations)
+            UserDefaults.standard.set(data, forKey: key)
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("Failed to encode folder customizations: \(error)")
+        }
+    }
+    
+    // MARK: - Markdown Defaults
+    
+    func setMarkdownDefaults(_ defaults: MarkdownDefaults) {
+        markdownDefaults = defaults
+        persistMarkdownDefaults()
+    }
+    
+    func presentMarkdownCustomization() {
+        activeSheet = .customizeMarkdown
+    }
+    
+    private func loadMarkdownDefaults() {
+        guard let data = UserDefaults.standard.data(forKey: "markdownDefaults") else {
+            markdownDefaults = MarkdownDefaults()
+            return
+        }
+        do {
+            let decoded = try JSONDecoder().decode(MarkdownDefaults.self, from: data)
+            markdownDefaults = decoded
+        } catch {
+            print("Failed to decode markdown defaults: \(error)")
+            markdownDefaults = MarkdownDefaults()
+        }
+    }
+    
+    private func persistMarkdownDefaults() {
+        do {
+            let data = try JSONEncoder().encode(markdownDefaults)
+            UserDefaults.standard.set(data, forKey: "markdownDefaults")
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("Failed to encode markdown defaults: \(error)")
+        }
+    }
+    
+    func initializeMarkdownDefaults() {
+        loadMarkdownDefaults()
     }
 }
 
@@ -477,12 +880,16 @@ enum ActiveSheet: Identifiable {
     case newFile
     case newFolder
     case delete
+    case customizeFolder
+    case customizeMarkdown
 
     var id: Int {
         switch self {
         case .newFile: return 0
         case .newFolder: return 1
         case .delete: return 2
+        case .customizeFolder: return 3
+        case .customizeMarkdown: return 4
         }
     }
 }
