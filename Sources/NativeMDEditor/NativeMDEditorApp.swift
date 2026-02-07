@@ -60,12 +60,69 @@ struct NativeMDEditorApp: App {
                 }
                 .keyboardShortcut(.delete, modifiers: [.command, .shift])
 
+                Button("Toggle Checkbox") {
+                    appState.toggleCheckbox()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+                .disabled(appState.activeFileURL == nil)
+
                 Divider()
 
-                Button("Toggle Preview") {
-                    appState.isPreview.toggle()
+                Button("Bold") {
+                    appState.toggleBold()
                 }
-                .keyboardShortcut("p", modifiers: [.command])
+                .keyboardShortcut("b", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Italic") {
+                    appState.toggleItalic()
+                }
+                .keyboardShortcut("i", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Inline Code") {
+                    appState.toggleCode()
+                }
+                .keyboardShortcut("e", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Strikethrough") {
+                    appState.toggleStrikethrough()
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Link") {
+                    appState.insertLink()
+                }
+                .keyboardShortcut("k", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Heading") {
+                    appState.insertHeading()
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Heading 1") {
+                    appState.setHeading(level: 1)
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Heading 2") {
+                    appState.setHeading(level: 2)
+                }
+                .keyboardShortcut("2", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Heading 3") {
+                    appState.setHeading(level: 3)
+                }
+                .keyboardShortcut("3", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Divider()
 
                 Button("Toggle Line Wrap") {
                     appState.isLineWrapping.toggle()

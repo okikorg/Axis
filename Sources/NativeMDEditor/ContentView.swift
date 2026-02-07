@@ -325,17 +325,6 @@ private struct BreadcrumbView: View {
             }
             
             Spacer()
-            
-            // Mode toggle - icon only, minimal
-            HStack(spacing: Theme.Spacing.xs) {
-                ModeToggleButton(icon: "pencil", isActive: !appState.isPreview) {
-                    appState.isPreview = false
-                }
-                
-                ModeToggleButton(icon: "eye", isActive: appState.isPreview) {
-                    appState.isPreview = true
-                }
-            }
         }
         .padding(.horizontal, Theme.Spacing.xl)
         .frame(height: 24)
@@ -375,29 +364,6 @@ private struct BreadcrumbItemView: View {
                 .font(Theme.Fonts.statusBar)
                 .foregroundStyle(item.isFile ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
         }
-    }
-}
-
-private struct ModeToggleButton: View {
-    let icon: String
-    let isActive: Bool
-    let action: () -> Void
-    
-    @State private var isHovering = false
-    
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(Theme.Fonts.icon)
-                .foregroundStyle(isActive ? Theme.Colors.text : Theme.Colors.textMuted)
-                .frame(width: 22, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.small)
-                        .fill(isHovering ? Theme.Colors.hover : Color.clear)
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
     }
 }
 

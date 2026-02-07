@@ -194,10 +194,10 @@ final class AppState: ObservableObject {
     @Published var openFiles: [OpenFile] = []
     @Published var activeFileURL: URL? = nil
     @Published var currentText: String = ""  // Direct text binding
-    @Published var isPreview: Bool = false
     @Published var isDistractionFree: Bool = false
     @Published var isLineWrapping: Bool = true
     @Published var zoomLevel: CGFloat = 1.0  // 1.0 = 100%
+    @Published var selectionRange: NSRange = NSRange(location: 0, length: 0)
     @Published var showSearch: Bool = false
     @Published var editorSearchQuery: String = ""
     @Published var currentMatchIndex: Int = 0
@@ -741,6 +741,170 @@ final class AppState: ObservableObject {
     func findPrevious() {
         guard matchCount > 0 else { return }
         currentMatchIndex = (currentMatchIndex - 1 + matchCount) % matchCount
+    }
+
+    // MARK: - Inline Formatting
+
+    /// Toggle wrapping of the selected text with the given marker (e.g. "**", "*", "`", "~~").
+    /// If nothing is selected, inserts the markers and places cursor between them.
+    /// If selection is already wrapped, removes the markers.
+    func toggleInlineFormat(_ marker: String) {
+        guard activeFileURL != nil else { return }
+        let nsText = currentText as NSString
+        let sel = selectionRange
+        let loc = min(sel.location, nsText.length)
+        let len = min(sel.length, nsText.length - loc)
+        let safeSel = NSRange(location: loc, length: len)
+        let ml = marker.count
+
+        if safeSel.length > 0 {
+            // Check if selection is already wrapped
+            let before = safeSel.location >= ml ? NSRange(location: safeSel.location - ml, length: ml) : nil
+            let after = (safeSel.location + safeSel.length + ml <= nsText.length) ? NSRange(location: safeSel.location + safeSel.length, length: ml) : nil
+
+            if let b = before, let a = after,
+               nsText.substring(with: b) == marker,
+               nsText.substring(with: a) == marker {
+                // Remove markers
+                var result = nsText.replacingCharacters(in: a, with: "")
+                result = (result as NSString).replacingCharacters(in: b, with: "")
+                updateText(result)
+                selectionRange = NSRange(location: b.location, length: safeSel.length)
+            } else {
+                // Wrap selection
+                let selected = nsText.substring(with: safeSel)
+                let wrapped = "\(marker)\(selected)\(marker)"
+                let result = nsText.replacingCharacters(in: safeSel, with: wrapped)
+                updateText(result)
+                selectionRange = NSRange(location: safeSel.location + ml, length: safeSel.length)
+            }
+        } else {
+            // No selection -- insert markers and cursor between
+            let result = nsText.replacingCharacters(in: safeSel, with: "\(marker)\(marker)")
+            updateText(result)
+            selectionRange = NSRange(location: loc + ml, length: 0)
+        }
+    }
+
+    func toggleBold() { toggleInlineFormat("**") }
+    func toggleItalic() { toggleInlineFormat("*") }
+    func toggleCode() { toggleInlineFormat("`") }
+    func toggleStrikethrough() { toggleInlineFormat("~~") }
+
+    func insertLink() {
+        guard activeFileURL != nil else { return }
+        let nsText = currentText as NSString
+        let sel = selectionRange
+        let loc = min(sel.location, nsText.length)
+        let len = min(sel.length, nsText.length - loc)
+        let safeSel = NSRange(location: loc, length: len)
+
+        if safeSel.length > 0 {
+            let selected = nsText.substring(with: safeSel)
+            let link = "[\(selected)](url)"
+            let result = nsText.replacingCharacters(in: safeSel, with: link)
+            updateText(result)
+            // Select "url" so user can type over it
+            let urlStart = safeSel.location + selected.count + 2
+            selectionRange = NSRange(location: urlStart, length: 3)
+        } else {
+            let link = "[](url)"
+            let result = nsText.replacingCharacters(in: safeSel, with: link)
+            updateText(result)
+            selectionRange = NSRange(location: loc + 1, length: 0)
+        }
+    }
+
+    func insertHeading() {
+        guard activeFileURL != nil else { return }
+        let nsText = currentText as NSString
+        let pos = min(selectionRange.location, nsText.length)
+        let lineRange = nsText.lineRange(for: NSRange(location: pos, length: 0))
+        let line = nsText.substring(with: lineRange)
+
+        // Count existing heading level
+        var level = 0
+        for ch in line {
+            if ch == "#" { level += 1 } else { break }
+        }
+
+        var newLine: String
+        if level >= 6 {
+            // Remove heading
+            newLine = String(line.drop(while: { $0 == "#" }).drop(while: { $0 == " " }))
+        } else if level > 0 {
+            // Increase heading level
+            newLine = "#\(line)"
+        } else {
+            // Add heading
+            newLine = "# \(line)"
+        }
+
+        let result = nsText.replacingCharacters(in: lineRange, with: newLine)
+        updateText(result)
+    }
+
+    /// Set the current line to a specific heading level (1-6), or remove heading if already at that level.
+    func setHeading(level targetLevel: Int) {
+        guard activeFileURL != nil else { return }
+        guard targetLevel >= 1 && targetLevel <= 6 else { return }
+        let nsText = currentText as NSString
+        let pos = min(selectionRange.location, nsText.length)
+        let lineRange = nsText.lineRange(for: NSRange(location: pos, length: 0))
+        let line = nsText.substring(with: lineRange)
+
+        // Count existing heading level
+        var currentLevel = 0
+        for ch in line {
+            if ch == "#" { currentLevel += 1 } else { break }
+        }
+
+        // Strip existing heading prefix to get bare content
+        let content = String(line.drop(while: { $0 == "#" }).drop(while: { $0 == " " }))
+        let prefix = String(repeating: "#", count: targetLevel)
+
+        let newLine: String
+        if currentLevel == targetLevel {
+            // Already at this level — remove heading
+            newLine = content
+        } else {
+            // Set to target level
+            newLine = "\(prefix) \(content)"
+        }
+
+        let result = nsText.replacingCharacters(in: lineRange, with: newLine)
+        updateText(result)
+    }
+
+    // MARK: - Checkbox Toggle
+
+    func toggleCheckbox() {
+        guard activeFileURL != nil else { return }
+        let text = currentText
+        guard !text.isEmpty else { return }
+
+        let nsText = text as NSString
+        let clampedPos = min(selectionRange.location, nsText.length)
+        let lineRange = nsText.lineRange(for: NSRange(location: clampedPos, length: 0))
+        let line = nsText.substring(with: lineRange)
+
+        var newLine: String
+        if line.contains("- [x] ") || line.contains("- [X] ") {
+            newLine = line.replacingOccurrences(of: "- [x] ", with: "- [ ] ")
+            newLine = newLine.replacingOccurrences(of: "- [X] ", with: "- [ ] ")
+        } else if line.contains("- [ ] ") {
+            newLine = line.replacingOccurrences(of: "- [ ] ", with: "- [x] ")
+        } else if let range = line.range(of: "^(\\s*[-*+])\\s", options: .regularExpression) {
+            let marker = String(line[range])
+            newLine = line.replacingCharacters(in: range, with: "\(marker)[ ] ")
+        } else {
+            let leadingWhitespace = line.prefix(while: { $0.isWhitespace && !$0.isNewline })
+            let content = line.drop(while: { $0.isWhitespace && !$0.isNewline })
+            newLine = "\(leadingWhitespace)- [ ] \(content)"
+        }
+
+        let replaced = nsText.replacingCharacters(in: lineRange, with: newLine)
+        updateText(replaced)
     }
 
     // MARK: - Folder Expansion

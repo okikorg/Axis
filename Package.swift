@@ -9,15 +9,11 @@ let package = Package(
     products: [
         .executable(name: "NativeMDEditor", targets: ["NativeMDEditor"]) 
     ],
-    dependencies: [
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.3.0")
-    ],
+    dependencies: [],
     targets: [
         .executableTarget(
             name: "NativeMDEditor",
-            dependencies: [
-                .product(name: "MarkdownUI", package: "swift-markdown-ui")
-            ],
+            dependencies: [],
             path: "Sources/NativeMDEditor"
         )
     ]
