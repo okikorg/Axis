@@ -104,7 +104,7 @@ struct NativeMDEditorApp: App {
                         appState.isDistractionFree.toggle()
                     }
                 }
-                .keyboardShortcut("\\", modifiers: [.command])
+                .keyboardShortcut("/", modifiers: [.command])
             }
             
             // Zoom commands
