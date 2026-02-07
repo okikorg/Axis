@@ -1,0 +1,75 @@
+{
+  "": {
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/master.swiftdeps"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/Deprecations.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/Deprecations.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/Deprecations.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/Deprecations~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/Deprecations.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/Deprecations.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/ImageSource.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/ImageSource.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/ImageSource.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/ImageSource~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/ImageSource.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/ImageSource.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/NetworkImage.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImage.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImage.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImage~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImage.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImage.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/NetworkImageCache.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageCache.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageCache.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageCache~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageCache.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageCache.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/NetworkImageLoader.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageLoader.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageLoader.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageLoader~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageLoader.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageLoader.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/NetworkImageModel.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageModel.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageModel.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageModel.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageModel.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/NetworkImageState.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageState.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageState.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageState~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageState.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/NetworkImageState.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/TaskModifier.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/TaskModifier.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/TaskModifier.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/TaskModifier~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/TaskModifier.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/TaskModifier.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/URLSession+NetworkImage.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/URLSession+NetworkImage.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/URLSession+NetworkImage.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/URLSession+NetworkImage~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/URLSession+NetworkImage.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/URLSession+NetworkImage.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/checkouts/NetworkImage/Sources/NetworkImage/View+NetworkImageLoader.swift": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/View+NetworkImageLoader.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/View+NetworkImageLoader.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/View+NetworkImageLoader~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/View+NetworkImageLoader.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/debug/NetworkImage.build/View+NetworkImageLoader.dia"
+  }
+}

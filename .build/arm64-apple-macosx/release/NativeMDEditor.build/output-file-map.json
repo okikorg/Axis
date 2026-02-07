@@ -1,0 +1,67 @@
+{
+  "": {
+    "dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/NativeMDEditor.d",
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/NativeMDEditor.o",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/master.swiftdeps"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/AppState.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/AppState.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/AppState~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/AppState.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/AppState.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/ContentView.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/ContentView.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/ContentView~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/ContentView.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/ContentView.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/DesignSystem.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DesignSystem.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DesignSystem~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DesignSystem.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DesignSystem.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/DirectoryMonitor.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DirectoryMonitor.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DirectoryMonitor~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DirectoryMonitor.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/DirectoryMonitor.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/EditorView.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/EditorView.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/EditorView~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/EditorView.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/EditorView.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/FileTree.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/FileTree.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/FileTree~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/FileTree.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/FileTree.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/NativeMDEditorApp.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/NativeMDEditorApp.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/NativeMDEditorApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/NativeMDEditorApp.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/NativeMDEditorApp.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/Prompts.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Prompts.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Prompts~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Prompts.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Prompts.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/SidebarView.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/SidebarView.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/SidebarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/SidebarView.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/SidebarView.dia"
+  },
+  "/Users/akashswamy/Workspace/fun-projects/native-md-editor/Sources/NativeMDEditor/Utilities.swift": {
+    "object": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Utilities.swift.o",
+    "swiftmodule": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Utilities~partial.swiftmodule",
+    "swift-dependencies": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Utilities.swiftdeps",
+    "diagnostics": "/Users/akashswamy/Workspace/fun-projects/native-md-editor/.build/arm64-apple-macosx/release/NativeMDEditor.build/Utilities.dia"
+  }
+}
