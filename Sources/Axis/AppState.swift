@@ -250,7 +250,7 @@ final class AppState: ObservableObject {
     @Published var fullTextSearchMode: Bool = false
     @Published var customizingFolderURL: URL? = nil
     @Published var renamingNodeURL: URL? = nil
-    @Published var showOutline: Bool = false
+    @Published var showOutline: Bool = true
     @Published var recentFolders: [String] = []
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {

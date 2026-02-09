@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 
 struct SidebarView: View {
@@ -188,14 +189,19 @@ private struct FileRowView: View {
             } else {
                 return customization.icon
             }
+        } else if node.isImageFile {
+            return "photo"
         } else {
             return appState.markdownDefaults.icon
         }
     }
-    
+
     private var nodeColor: Color {
         if node.isDirectory {
             return folderCustomization.color
+        }
+        if node.isImageFile {
+            return Color(hex: "888888")
         }
         return appState.markdownDefaults.color
     }
@@ -289,7 +295,12 @@ private struct FileRowView: View {
                 appState.toggleExpanded(node.url)
             }
         }
-        appState.setSelectedNode(node.url)
+        if node.isImageFile {
+            appState.selectedNodeURL = node.url
+            NSWorkspace.shared.open(node.url)
+        } else {
+            appState.setSelectedNode(node.url)
+        }
     }
     
     @ViewBuilder
@@ -322,6 +333,18 @@ private struct FileRowView: View {
                 appState.presentFolderCustomization(for: node.url)
             } label: {
                 Label("Customize Folder...", systemImage: "paintpalette")
+            }
+        } else if node.isImageFile {
+            Button {
+                NSWorkspace.shared.open(node.url)
+            } label: {
+                Label("Open in Preview", systemImage: "eye")
+            }
+
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([node.url])
+            } label: {
+                Label("Show in Finder", systemImage: "folder")
             }
         } else {
             Button {

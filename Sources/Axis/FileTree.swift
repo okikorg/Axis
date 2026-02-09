@@ -5,15 +5,22 @@ struct FileNode: Identifiable, Hashable {
     let url: URL
     let name: String
     let isDirectory: Bool
+    let isImageFile: Bool
     var children: [FileNode]?
     let markdownCount: Int
     let containsMarkdown: Bool
 
-    init(url: URL, isDirectory: Bool, children: [FileNode]? = nil, markdownCount: Int = 0, containsMarkdown: Bool = false) {
+    static let imageExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "tiff", "tif",
+        "webp", "heic", "heif", "bmp", "svg", "ico"
+    ]
+
+    init(url: URL, isDirectory: Bool, isImageFile: Bool = false, children: [FileNode]? = nil, markdownCount: Int = 0, containsMarkdown: Bool = false) {
         self.id = url
         self.url = url
         self.name = url.lastPathComponent
         self.isDirectory = isDirectory
+        self.isImageFile = isImageFile
         self.children = children
         self.markdownCount = markdownCount
         self.containsMarkdown = containsMarkdown
@@ -78,6 +85,8 @@ final class FileTreeBuilder {
                 nodes.append(FileNode(url: url, isDirectory: true, children: children, markdownCount: count, containsMarkdown: count > 0))
             } else if url.pathExtension.lowercased() == "md" {
                 nodes.append(FileNode(url: url, isDirectory: false, markdownCount: 1, containsMarkdown: true))
+            } else if FileNode.imageExtensions.contains(url.pathExtension.lowercased()) {
+                nodes.append(FileNode(url: url, isDirectory: false, isImageFile: true))
             }
         }
         return nodes
