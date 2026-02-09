@@ -177,8 +177,27 @@ private struct EmptyEditorView: View {
         ("⌘ +/−/0", "Zoom in/out/reset"),
     ]
     
+    private let asciiLines: [String] = [
+        " \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2557}  \u{2588}\u{2588}\u{2557}  \u{2588}\u{2588}\u{2557} \u{2588}\u{2588}\u{2557} \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2557}",
+        " \u{2588}\u{2588}\u{2554}\u{2550}\u{2550}\u{2588}\u{2588}\u{2557} \u{255a}\u{2588}\u{2588}\u{2557}\u{2588}\u{2588}\u{2554}\u{255d} \u{2588}\u{2588}\u{2551} \u{2588}\u{2588}\u{2554}\u{2550}\u{2550}\u{2550}\u{2550}\u{255d}",
+        " \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2551}  \u{255a}\u{2588}\u{2588}\u{2588}\u{2554}\u{255d}  \u{2588}\u{2588}\u{2551} \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2557}",
+        " \u{2588}\u{2588}\u{2554}\u{2550}\u{2550}\u{2588}\u{2588}\u{2551}  \u{2588}\u{2588}\u{2554}\u{2588}\u{2588}\u{2557}  \u{2588}\u{2588}\u{2551} \u{255a}\u{2550}\u{2550}\u{2550}\u{2550}\u{2588}\u{2588}\u{2551}",
+        " \u{2588}\u{2588}\u{2551}  \u{2588}\u{2588}\u{2551} \u{2588}\u{2588}\u{2554}\u{255d} \u{2588}\u{2588}\u{2557} \u{2588}\u{2588}\u{2551} \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2551}",
+        " \u{255a}\u{2550}\u{255d}  \u{255a}\u{2550}\u{255d} \u{255a}\u{2550}\u{255d}  \u{255a}\u{2550}\u{255d} \u{255a}\u{2550}\u{255d} \u{255a}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{255d}",
+    ]
+
     var body: some View {
         VStack(spacing: Theme.Spacing.xxl) {
+            // ASCII title
+            VStack(spacing: 0) {
+                ForEach(Array(asciiLines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.Colors.textMuted.opacity(0.6))
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+
             // Shortcuts list
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 ForEach(shortcuts, id: \.key) { shortcut in
