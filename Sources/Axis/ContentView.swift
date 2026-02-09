@@ -127,16 +127,19 @@ struct ContentView: View {
 
 private struct WelcomeView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var hoveredRecent: String? = nil
 
     var body: some View {
         VStack(spacing: Theme.Spacing.xxl) {
+            Spacer()
+            
             // Minimal icon - no background
             Image(systemName: "doc.text")
                 .font(Theme.Fonts.welcomeIcon)
                 .foregroundStyle(Theme.Colors.textMuted)
             
             VStack(spacing: Theme.Spacing.s) {
-                Text("Native MD Editor")
+                Text("Axis")
                     .font(Theme.Fonts.welcomeTitle)
                     .foregroundStyle(Theme.Colors.textSecondary)
                 
@@ -162,9 +165,70 @@ private struct WelcomeView: View {
                     .font(Theme.Fonts.statusBar)
                     .foregroundStyle(Theme.Colors.textMuted)
             }
+            
+            // Recent folders
+            if !appState.recentFolders.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("RECENT")
+                        .font(Theme.Fonts.statusBar)
+                        .foregroundStyle(Theme.Colors.textDisabled)
+                        .padding(.bottom, Theme.Spacing.xs)
+                    
+                    ForEach(appState.recentFolders, id: \.self) { path in
+                        Button {
+                            let url = URL(fileURLWithPath: path)
+                            if FileManager.default.fileExists(atPath: path) {
+                                appState.setRoot(url)
+                            }
+                        } label: {
+                            HStack(spacing: Theme.Spacing.m) {
+                                Image(systemName: "folder")
+                                    .font(Theme.Fonts.icon)
+                                    .foregroundStyle(Theme.Colors.textMuted)
+                                    .frame(width: 14)
+                                
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(URL(fileURLWithPath: path).lastPathComponent)
+                                        .font(Theme.Fonts.uiSmall)
+                                        .foregroundStyle(hoveredRecent == path ? Theme.Colors.text : Theme.Colors.textSecondary)
+                                        .lineLimit(1)
+                                    
+                                    Text(abbreviatePath(path))
+                                        .font(Theme.Fonts.statusBar)
+                                        .foregroundStyle(Theme.Colors.textDisabled)
+                                        .lineLimit(1)
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, Theme.Spacing.m)
+                            .padding(.vertical, Theme.Spacing.s)
+                            .background(
+                                RoundedRectangle(cornerRadius: Theme.Radius.small)
+                                    .fill(hoveredRecent == path ? Theme.Colors.hover : Color.clear)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isHovering in
+                            hoveredRecent = isHovering ? path : nil
+                        }
+                    }
+                }
+                .frame(width: 280)
+            }
+            
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Colors.background)
+    }
+    
+    private func abbreviatePath(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
     }
 }
 
@@ -180,6 +244,13 @@ private struct MainEditorView: View {
                 if !appState.isDistractionFree {
                     SidebarView()
                         .frame(width: sidebarWidth(for: geo.size.width))
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+
+                    // Subtle sidebar/editor divider
+                    Rectangle()
+                        .fill(Theme.Colors.divider)
+                        .frame(width: 1)
+                        .transition(.opacity)
                 }
                 
                 // Editor Area - seamless transition
@@ -490,17 +561,31 @@ private struct BreadcrumbItemView: View {
 private struct StatusBarView: View {
     @EnvironmentObject private var appState: AppState
     
+    private var readingTime: String {
+        let words = appState.wordCount()
+        let minutes = max(1, Int(ceil(Double(words) / 200.0)))
+        return "\(minutes) min read"
+    }
+    
     var body: some View {
         HStack(spacing: Theme.Spacing.l) {
-            // Left side - stats (subtle)
+            // Left side - cursor position
+            Text("Ln \(appState.cursorLine), Col \(appState.cursorColumn)")
+                .font(Theme.Fonts.statusBar)
+                .foregroundStyle(Theme.Colors.textMuted)
+            
+            Text("·")
+                .foregroundStyle(Theme.Colors.textDisabled)
+            
+            // Stats
             Text("\(appState.wordCount()) words")
                 .font(Theme.Fonts.statusBar)
                 .foregroundStyle(Theme.Colors.textMuted)
             
             Text("·")
-                .foregroundStyle(Theme.Colors.textMuted)
+                .foregroundStyle(Theme.Colors.textDisabled)
             
-            Text("\(appState.lineCount()) lines")
+            Text(readingTime)
                 .font(Theme.Fonts.statusBar)
                 .foregroundStyle(Theme.Colors.textMuted)
             
@@ -513,15 +598,15 @@ private struct StatusBarView: View {
                     .foregroundStyle(Theme.Colors.textMuted)
                 
                 Text("·")
-                    .foregroundStyle(Theme.Colors.textMuted)
+                    .foregroundStyle(Theme.Colors.textDisabled)
             }
             
             Text(appState.isDirty ? "Edited" : "Saved")
                 .font(Theme.Fonts.statusBar)
-                .foregroundStyle(Theme.Colors.textMuted)
+                .foregroundStyle(appState.isDirty ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
         }
         .padding(.horizontal, Theme.Spacing.xl)
-        .frame(height: 22)
+        .frame(height: 24)
         .background(Theme.Colors.statusBar)
     }
 }

@@ -15,6 +15,20 @@ struct InlineImageInfo {
     let image: NSImage?
 }
 
+// MARK: - NSImage PNG with correct orientation
+
+private extension NSImage {
+    /// Convert to PNG via CGImage, which avoids the coordinate-flip issue
+    /// that tiffRepresentation / NSBitmapImageRep graphics contexts produce.
+    func pngDataCorrectOrientation() -> Data? {
+        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        return rep.representation(using: .png, properties: [:])
+    }
+}
+
 struct EditorView: View {
     @EnvironmentObject private var appState: AppState
 
@@ -283,7 +297,8 @@ private class CheckboxLayoutManager: NSLayoutManager {
                 NSGraphicsContext.saveGraphicsState()
                 let clipPath = NSBezierPath(roundedRect: imageRect, xRadius: 6, yRadius: 6)
                 clipPath.addClip()
-                nsImage.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+
+                nsImage.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0, respectFlipped: true, hints: nil)
                 NSGraphicsContext.restoreGraphicsState()
 
                 // Subtle border
@@ -384,7 +399,7 @@ private class CheckboxLayoutManager: NSLayoutManager {
 
 private class ImageAwareTextView: NSTextView {
     weak var coordinator: HighlightingTextEditor.Coordinator?
-
+    
     private static let imageTypes: Set<NSPasteboard.PasteboardType> = [
         .tiff, .png,
         NSPasteboard.PasteboardType("public.jpeg"),
@@ -396,22 +411,32 @@ private class ImageAwareTextView: NSTextView {
     override func paste(_ sender: Any?) {
         let pb = NSPasteboard.general
 
-        // Check if the pasteboard's primary content is image data.
-        // The types array is ordered by the source app's preference.
-        // If an image type appears before .string, treat it as an image paste.
         if let activeURL = coordinator?.parent.appState.activeFileURL,
-           let types = pb.types {
-            let stringIndex = types.firstIndex(of: .string) ?? types.endIndex
-            let hasImageBeforeString = types.prefix(upTo: stringIndex).contains(where: { Self.imageTypes.contains($0) })
+           pb.canReadObject(forClasses: [NSImage.self], options: nil) {
 
-            if hasImageBeforeString,
-               let imageData = pb.data(forType: .png) ?? pb.data(forType: .tiff) {
-                if let relativePath = HighlightingTextEditor.Coordinator.saveImageData(imageData, near: activeURL) {
-                    let markdown = "![image](\(relativePath))"
-                    let sel = selectedRange()
-                    insertText(markdown, replacementRange: sel)
-                    return
-                }
+            // Only treat as image paste when the pasteboard does NOT carry
+            // meaningful plain-text (browsers attach the image src URL as text;
+            // rich-text copies may include .tiff alongside paragraphs of text).
+            let hasString = pb.types?.contains(.string) ?? false
+            let stringIsTextContent: Bool
+            if hasString, let str = pb.string(forType: .string) {
+                let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Browsers put the source URL as the string; that's not "real" text
+                stringIsTextContent = !trimmed.isEmpty
+                    && !trimmed.hasPrefix("http://")
+                    && !trimmed.hasPrefix("https://")
+            } else {
+                stringIsTextContent = false
+            }
+
+            if !stringIsTextContent,
+               let image = NSImage(pasteboard: pb),
+               let pngData = image.pngDataCorrectOrientation(),
+               let relativePath = HighlightingTextEditor.Coordinator.saveImageData(pngData, near: activeURL) {
+                let markdown = "![image](\(relativePath))"
+                let sel = selectedRange()
+                insertText(markdown, replacementRange: sel)
+                return
             }
         }
 
@@ -1853,34 +1878,26 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let dir = fileURL.deletingLastPathComponent()
             let imagesDir = dir.appendingPathComponent("images")
 
-            // Ensure images/ directory exists
-            try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
-
             let timestamp = Int(Date().timeIntervalSince1970 * 1000)
             // Detect format from data header
-            let ext: String
+            let finalData: Data
             if data.count >= 8, data.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-                ext = "png"
+                finalData = data
             } else {
-                // Default: save as PNG from TIFF data
+                // Convert to PNG from TIFF/other data
                 guard let bitmapRep = NSBitmapImageRep(data: data),
                       let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
                     return nil
                 }
-                let filename = "image-\(timestamp).png"
-                let destURL = imagesDir.appendingPathComponent(filename)
-                do {
-                    try pngData.write(to: destURL)
-                    return "images/\(filename)"
-                } catch {
-                    return nil
-                }
+                finalData = pngData
             }
 
-            let filename = "image-\(timestamp).\(ext)"
+            let filename = "image-\(timestamp).png"
             let destURL = imagesDir.appendingPathComponent(filename)
             do {
-                try data.write(to: destURL)
+                // Only create the directory right before writing
+                try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+                try finalData.write(to: destURL)
                 return "images/\(filename)"
             } catch {
                 return nil

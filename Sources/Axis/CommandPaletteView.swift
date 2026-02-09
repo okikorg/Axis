@@ -37,6 +37,165 @@ private struct ContentMatch {
     let lineText: String
 }
 
+// MARK: - Fuzzy Match (Recursive Exhaustive - Sublime Text / fts_fuzzy_match style)
+//
+// Considers ALL possible alignments of query chars against the target and picks
+// the highest-scoring one. Recursion capped at 10 to bound worst-case cost.
+
+private let kSequentialBonus      = 15
+private let kSeparatorBonus       = 30
+private let kCamelBonus           = 30
+private let kFirstLetterBonus     = 15
+private let kLeadingLetterPenalty = -5
+private let kMaxLeadingPenalty    = -15
+private let kUnmatchedPenalty     = -1
+private let kCommandBias          = 40
+
+private func fuzzyScore(_ query: String, in target: String) -> Int {
+    guard !query.isEmpty else { return 1 }
+    let patLower = Array(query.lowercased().unicodeScalars)
+    let str = Array(target.unicodeScalars)
+    let strLower = Array(target.lowercased().unicodeScalars)
+    guard patLower.count <= strLower.count else { return 0 }
+
+    var bestScore = 0
+    var matched = false
+    var recursions = 0
+    fuzzyRecurse(
+        patLower: patLower, pi: 0,
+        str: str, strLower: strLower, si: 0,
+        matches: [], bestScore: &bestScore, matched: &matched,
+        recursions: &recursions
+    )
+    return matched ? max(bestScore, 1) : 0
+}
+
+private func fuzzyRecurse(
+    patLower: [Unicode.Scalar], pi: Int,
+    str: [Unicode.Scalar], strLower: [Unicode.Scalar], si: Int,
+    matches: [Int],
+    bestScore: inout Int, matched: inout Bool,
+    recursions: inout Int
+) {
+    if recursions > 10 { return }
+    recursions += 1
+
+    if pi == patLower.count {
+        matched = true
+        let s = scoreAlignment(str: str, strLower: strLower, matches: matches)
+        if s > bestScore { bestScore = s }
+        return
+    }
+    guard si < strLower.count else { return }
+
+    let pch = patLower[pi]
+    for i in si..<strLower.count {
+        if strLower[i] == pch {
+            var next = matches
+            next.append(i)
+            fuzzyRecurse(
+                patLower: patLower, pi: pi + 1,
+                str: str, strLower: strLower, si: i + 1,
+                matches: next,
+                bestScore: &bestScore, matched: &matched,
+                recursions: &recursions
+            )
+        }
+    }
+}
+
+private func scoreAlignment(str: [Unicode.Scalar], strLower: [Unicode.Scalar], matches: [Int]) -> Int {
+    guard let first = matches.first else { return 0 }
+    var score = 0
+    score += max(kMaxLeadingPenalty, kLeadingLetterPenalty * first)
+    score += kUnmatchedPenalty * (str.count - matches.count)
+
+    for (idx, mi) in matches.enumerated() {
+        if mi == 0 { score += kFirstLetterBonus }
+        if idx > 0 && mi == matches[idx - 1] + 1 { score += kSequentialBonus }
+        if mi > 0 {
+            let prev = str[mi - 1]
+            if prev == " " || prev == "_" || prev == "-" || prev == "." || prev == "/" {
+                score += kSeparatorBonus
+            } else if isLowerScalar(prev) && isUpperScalar(str[mi]) {
+                score += kCamelBonus
+            }
+        }
+    }
+    return score
+}
+
+@inline(__always)
+private func isUpperScalar(_ c: Unicode.Scalar) -> Bool { c.value >= 65 && c.value <= 90 }
+@inline(__always)
+private func isLowerScalar(_ c: Unicode.Scalar) -> Bool { c.value >= 97 && c.value <= 122 }
+
+private func commandScore(query: String, name: String) -> Int {
+    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    let base = fuzzyScore(trimmed, in: name)
+    if trimmed.isEmpty { return base + kCommandBias }
+    if base <= 0 { return 0 }
+
+    let queryLower = trimmed.lowercased()
+    let nameLower = name.lowercased()
+    var bonus = 0
+
+    let separators = CharacterSet(charactersIn: " _-./")
+    let queryTokens = queryLower.split { $0.unicodeScalars.allSatisfy { separators.contains($0) } }
+    let nameTokens = nameLower.split { $0.unicodeScalars.allSatisfy { separators.contains($0) } }
+
+    // Token-aware scoring: reward matches against individual words, regardless of order.
+    var tokenScore = 0
+    if !queryTokens.isEmpty, !nameTokens.isEmpty {
+        var matchedTokens = 0
+        for token in queryTokens {
+            var bestToken = 0
+            for word in nameTokens {
+                let s = fuzzyScore(String(token), in: String(word))
+                if s > bestToken { bestToken = s }
+                if word.hasPrefix(token) { bestToken += 40 }
+                if word == token { bestToken += 80 }
+            }
+            if bestToken > 0 {
+                matchedTokens += 1
+                tokenScore += bestToken
+            }
+        }
+        if matchedTokens == queryTokens.count { bonus += 80 }
+        if matchedTokens == 0 { return 0 }
+    }
+
+    if nameLower == queryLower { bonus += 200 }
+    if nameLower.hasPrefix(queryLower) {
+        bonus += 120
+    } else if nameLower.contains(queryLower) {
+        bonus += 60
+    }
+
+    if !queryTokens.isEmpty, !nameTokens.isEmpty {
+        var matchedWordStarts = 0
+        var searchIndex = 0
+        var ordered = true
+        for token in queryTokens {
+            var found = false
+            for i in searchIndex..<nameTokens.count {
+                if nameTokens[i].hasPrefix(token) {
+                    matchedWordStarts += 1
+                    searchIndex = i + 1
+                    found = true
+                    break
+                }
+            }
+            if !found { ordered = false }
+        }
+        if matchedWordStarts == queryTokens.count { bonus += 80 }
+        if ordered && queryTokens.count > 1 { bonus += 40 }
+    }
+
+    let combined = max(base, tokenScore)
+    return combined + bonus + kCommandBias
+}
+
 // MARK: - Command Palette View
 
 struct CommandPaletteView: View {
@@ -45,6 +204,7 @@ struct CommandPaletteView: View {
     @State private var selectedIndex: Int = 0
     @State private var results: [PaletteResult] = []
     @State private var contentSearchWork: DispatchWorkItem?
+    @State private var clickMonitor: Any?
 
     private static let commands: [PaletteCommand] = [
         PaletteCommand(name: "Toggle Theme", shortcut: "Cmd+T") { state in
@@ -98,12 +258,10 @@ struct CommandPaletteView: View {
 
     var body: some View {
         ZStack {
-            // Dimmed backdrop
+            // Dimmed backdrop (visual only, no gesture handling)
             Color.black.opacity(0.3)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
-                }
+                .allowsHitTesting(false)
 
             VStack(spacing: 0) {
             // Floating panel
@@ -117,7 +275,11 @@ struct CommandPaletteView: View {
                         ? "Search across all files..."
                         : "Search files, content, or type > for commands...",
                     onSubmit: executeSelected,
-                    onEscape: dismiss
+                    onEscape: dismiss,
+                    onQueryChanged: { newQuery in
+                        selectedIndex = 0
+                        updateResults(for: newQuery)
+                    }
                 )
                 .padding(Theme.Spacing.l)
 
@@ -181,10 +343,36 @@ struct CommandPaletteView: View {
         }
         .onAppear {
             updateResults(for: "")
+            installClickOutsideMonitor()
         }
-        .onChange(of: query) { newQuery in
-            selectedIndex = 0
-            updateResults(for: newQuery)
+        .onDisappear {
+            removeClickOutsideMonitor()
+        }
+    }
+
+    // MARK: - Click Outside to Dismiss (NSEvent monitor, doesn't block scroll)
+
+    private func installClickOutsideMonitor() {
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            guard let window = event.window else { return event }
+            let loc = event.locationInWindow
+            // Find the panel frame: centered, 580pt wide, starts 60pt from top
+            let windowHeight = window.frame.height
+            let panelWidth: CGFloat = 580
+            let panelX = (window.frame.width - panelWidth) / 2
+            // Approximate panel bounds (top-aligned with padding)
+            let panelRect = NSRect(x: panelX, y: 0, width: panelWidth, height: windowHeight - 60)
+            if !panelRect.contains(loc) {
+                DispatchQueue.main.async { dismiss() }
+            }
+            return event
+        }
+    }
+
+    private func removeClickOutsideMonitor() {
+        if let monitor = clickMonitor {
+            NSEvent.removeMonitor(monitor)
+            clickMonitor = nil
         }
     }
 
@@ -206,7 +394,6 @@ struct CommandPaletteView: View {
                 guard let appState else { return }
                 let contentResults = self.searchContent(query: trimmed, appState: appState)
                 DispatchQueue.main.async {
-                    // Ensure the query hasn't changed since this search started
                     let currentTrimmed = self.query.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard currentTrimmed == trimmed else { return }
                     self.results = contentResults
@@ -226,36 +413,35 @@ struct CommandPaletteView: View {
             return
         }
 
-        // Mixed mode: files + folders + commands + content
-        var combined: [PaletteResult] = []
+        // ">" prefix = command-only mode
+        if trimmed.hasPrefix(">") {
+            let cmdQuery = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+            results = searchCommands(query: cmdQuery)
+            return
+        }
 
-        // File matches
-        combined.append(contentsOf: searchFiles(query: trimmed))
-
-        // Folder matches
-        combined.append(contentsOf: searchFolders(query: trimmed))
-
-        // Command matches
-        combined.append(contentsOf: searchCommands(query: trimmed))
-
-        // Show results immediately
-        results = Array(combined.prefix(50))
+        // Mixed mode: files + folders + commands + content, sorted by score
+        var scored: [(result: PaletteResult, score: Int)] = []
+        scored.append(contentsOf: searchFilesScored(query: trimmed))
+        scored.append(contentsOf: searchFoldersScored(query: trimmed))
+        scored.append(contentsOf: searchCommandsScored(query: trimmed))
+        scored.sort { $0.score > $1.score }
+        results = Array(scored.map(\.result).prefix(50))
 
         // Debounced content search
         let work = DispatchWorkItem { [weak appState] in
             guard let appState else { return }
             let contentResults = searchContent(query: trimmed, appState: appState)
             DispatchQueue.main.async {
-                // Ensure the query hasn't changed since this search started
                 let currentTrimmed = self.query.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard currentTrimmed == trimmed else { return }
-                // Rebuild to maintain order: files, folders, commands, content
-                var updated: [PaletteResult] = []
-                updated.append(contentsOf: self.searchFiles(query: trimmed))
-                updated.append(contentsOf: self.searchFolders(query: trimmed))
-                updated.append(contentsOf: self.searchCommands(query: trimmed))
-                updated.append(contentsOf: contentResults)
-                self.results = Array(updated.prefix(50))
+                var updated: [(result: PaletteResult, score: Int)] = []
+                updated.append(contentsOf: self.searchFilesScored(query: trimmed))
+                updated.append(contentsOf: self.searchFoldersScored(query: trimmed))
+                updated.append(contentsOf: self.searchCommandsScored(query: trimmed))
+                updated.append(contentsOf: contentResults.map { ($0, 1) })
+                updated.sort { $0.score > $1.score }
+                self.results = Array(updated.map(\.result).prefix(50))
                 if self.selectedIndex >= self.results.count {
                     self.selectedIndex = max(0, self.results.count - 1)
                 }
@@ -265,17 +451,20 @@ struct CommandPaletteView: View {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.2, execute: work)
     }
 
-    private func searchFiles(query: String) -> [PaletteResult] {
+    private func searchFilesScored(query: String) -> [(result: PaletteResult, score: Int)] {
         guard let rootURL = appState.rootURL else { return [] }
         let files = appState.allMarkdownFiles()
-        let lowered = query.lowercased()
 
         return files
-            .filter { $0.lastPathComponent.lowercased().contains(lowered) }
+            .compactMap { url -> (URL, Int)? in
+                let score = fuzzyScore(query, in: url.lastPathComponent)
+                return score > 0 ? (url, score) : nil
+            }
+            .sorted { $0.1 > $1.1 }
             .prefix(15)
-            .map { url in
+            .map { (url, score) in
                 let relative = url.path.replacingOccurrences(of: rootURL.path + "/", with: "")
-                return PaletteResult(
+                let result = PaletteResult(
                     kind: .file,
                     title: url.lastPathComponent,
                     subtitle: relative,
@@ -286,21 +475,26 @@ struct CommandPaletteView: View {
                     appState?.setSelectedNode(url)
                     appState?.openFile(at: url)
                 }
+                return (result: result, score: score)
             }
     }
 
-    private func searchFolders(query: String) -> [PaletteResult] {
+    private func searchFoldersScored(query: String) -> [(result: PaletteResult, score: Int)] {
         guard let rootURL = appState.rootURL else { return [] }
         let folders = appState.allFolders()
-        let lowered = query.lowercased()
 
         return folders
-            .filter { $0 != rootURL && $0.lastPathComponent.lowercased().contains(lowered) }
+            .filter { $0 != rootURL }
+            .compactMap { url -> (URL, Int)? in
+                let score = fuzzyScore(query, in: url.lastPathComponent)
+                return score > 0 ? (url, score) : nil
+            }
+            .sorted { $0.1 > $1.1 }
             .prefix(10)
-            .map { url in
+            .map { (url, score) in
                 let relative = url.path.replacingOccurrences(of: rootURL.path + "/", with: "")
                 let customization = appState.folderCustomization(for: url)
-                return PaletteResult(
+                let result = PaletteResult(
                     kind: .folder,
                     title: url.lastPathComponent,
                     subtitle: relative,
@@ -311,6 +505,7 @@ struct CommandPaletteView: View {
                     appState?.setExpanded(url, expanded: true)
                     appState?.selectedNodeURL = url
                 }
+                return (result: result, score: score)
             }
     }
 
@@ -359,24 +554,28 @@ struct CommandPaletteView: View {
     }
 
     private func searchCommands(query: String) -> [PaletteResult] {
-        let lowered = query.lowercased()
-        let filtered = Self.commands.filter {
-            lowered.isEmpty || $0.name.lowercased().contains(lowered)
-        }
+        searchCommandsScored(query: query).map(\.result)
+    }
 
-        return filtered.map { cmd in
-            PaletteResult(
-                kind: .command,
-                title: cmd.name,
-                subtitle: "",
-                icon: "gearshape",
-                iconColor: Theme.Colors.textSecondary,
-                shortcutHint: cmd.shortcut
-            ) { [weak appState] in
-                guard let appState else { return }
-                cmd.action(appState)
+    private func searchCommandsScored(query: String) -> [(result: PaletteResult, score: Int)] {
+        Self.commands
+            .map { ($0, commandScore(query: query, name: $0.name)) }
+            .filter { query.isEmpty || $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .map { (cmd, score) in
+                let result = PaletteResult(
+                    kind: .command,
+                    title: cmd.name,
+                    subtitle: "",
+                    icon: "gearshape",
+                    iconColor: Theme.Colors.textSecondary,
+                    shortcutHint: cmd.shortcut
+                ) { [weak appState] in
+                    guard let appState else { return }
+                    cmd.action(appState)
+                }
+                return (result: result, score: score)
             }
-        }
     }
 
     // MARK: - Actions
@@ -392,6 +591,7 @@ struct CommandPaletteView: View {
     }
 
     private func dismiss() {
+        removeClickOutsideMonitor()
         appState.fullTextSearchMode = false
         appState.showCommandPalette = false
     }
@@ -406,6 +606,7 @@ struct PaletteSearchField: NSViewRepresentable {
     let placeholder: String
     let onSubmit: () -> Void
     let onEscape: () -> Void
+    let onQueryChanged: (String) -> Void
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
@@ -413,6 +614,7 @@ struct PaletteSearchField: NSViewRepresentable {
         field.isBordered = false
         field.backgroundColor = .clear
         field.focusRingType = .none
+        field.isContinuous = true
         field.font = NSFont(name: "RobotoMono-Regular", size: 14) ?? NSFont.systemFont(ofSize: 14)
         field.delegate = context.coordinator
         field.cell?.sendsActionOnEndEditing = false
@@ -426,8 +628,6 @@ struct PaletteSearchField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
-        // Compare against the field editor text when actively editing
-        // to avoid overwriting in-progress edits with a stale cell value
         let currentText: String
         if let editor = nsView.currentEditor() as? NSTextView {
             currentText = editor.string
@@ -441,35 +641,54 @@ struct PaletteSearchField: NSViewRepresentable {
         context.coordinator.selectedIndex = $selectedIndex
         context.coordinator.onSubmit = onSubmit
         context.coordinator.onEscape = onEscape
+        context.coordinator.onQueryChanged = onQueryChanged
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(query: $query, selectedIndex: $selectedIndex, resultCount: resultCount, onSubmit: onSubmit, onEscape: onEscape)
+        Coordinator(query: $query, selectedIndex: $selectedIndex, resultCount: resultCount, onSubmit: onSubmit, onEscape: onEscape, onQueryChanged: onQueryChanged)
     }
 
-    class Coordinator: NSObject, NSTextFieldDelegate {
+    class Coordinator: NSObject, NSTextFieldDelegate, NSTextViewDelegate {
         var query: Binding<String>
         var selectedIndex: Binding<Int>
         var resultCount: Int
         var onSubmit: () -> Void
         var onEscape: () -> Void
+        var onQueryChanged: (String) -> Void
 
-        init(query: Binding<String>, selectedIndex: Binding<Int>, resultCount: Int, onSubmit: @escaping () -> Void, onEscape: @escaping () -> Void) {
+        init(query: Binding<String>, selectedIndex: Binding<Int>, resultCount: Int, onSubmit: @escaping () -> Void, onEscape: @escaping () -> Void, onQueryChanged: @escaping (String) -> Void) {
             self.query = query
             self.selectedIndex = selectedIndex
             self.resultCount = resultCount
             self.onSubmit = onSubmit
             self.onEscape = onEscape
+            self.onQueryChanged = onQueryChanged
         }
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField else { return }
-            // Read from the field editor for the most current text during editing
+            let newText: String
             if let editor = field.currentEditor() as? NSTextView {
-                query.wrappedValue = editor.string
+                newText = editor.string
             } else {
-                query.wrappedValue = field.stringValue
+                newText = field.stringValue
             }
+            query.wrappedValue = newText
+            onQueryChanged(newText)
+        }
+
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            if let editor = field.currentEditor() as? NSTextView {
+                editor.delegate = self
+            }
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let editor = notification.object as? NSTextView else { return }
+            let newText = editor.string
+            query.wrappedValue = newText
+            onQueryChanged(newText)
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {

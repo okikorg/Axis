@@ -8,6 +8,7 @@ DIST_DIR="$ROOT_DIR/dist"
 cd "$ROOT_DIR"
 
 echo "Building $APP_NAME (release)..."
+swift package clean
 swift build -c release
 
 BIN_DIR="$(swift build -c release --show-bin-path)"

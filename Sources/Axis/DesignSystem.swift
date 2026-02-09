@@ -48,21 +48,30 @@ enum Theme {
         static var selection: Color {
             Color(NSColor(name: nil) { appearance in
                 let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                return isDark ? NSColor.white.withAlphaComponent(0.06) : NSColor.black.withAlphaComponent(0.06)
+                return isDark ? NSColor.white.withAlphaComponent(0.08) : NSColor.black.withAlphaComponent(0.07)
             })
         }
         static var hover: Color {
             Color(NSColor(name: nil) { appearance in
                 let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                return isDark ? NSColor.white.withAlphaComponent(0.03) : NSColor.black.withAlphaComponent(0.03)
+                return isDark ? NSColor.white.withAlphaComponent(0.04) : NSColor.black.withAlphaComponent(0.04)
             })
         }
         static var activeRow: Color {
             Color(NSColor(name: nil) { appearance in
                 let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                return isDark ? NSColor.white.withAlphaComponent(0.05) : NSColor.black.withAlphaComponent(0.05)
+                return isDark ? NSColor.white.withAlphaComponent(0.06) : NSColor.black.withAlphaComponent(0.06)
             })
         }
+        // Subtle current-line highlight for the editor
+        static var currentLine: Color {
+            Color(NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return isDark ? NSColor.white.withAlphaComponent(0.03) : NSColor.black.withAlphaComponent(0.025)
+            })
+        }
+        // Thin active-tab indicator
+        static var tabIndicator: Color { adaptive(dark: "555555", light: "888888") }
         static var textSelection: Color { adaptive(dark: "444444", light: "b4d7ff") }
 
         // Folder/file icons

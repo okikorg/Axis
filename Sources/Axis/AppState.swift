@@ -251,6 +251,7 @@ final class AppState: ObservableObject {
     @Published var customizingFolderURL: URL? = nil
     @Published var renamingNodeURL: URL? = nil
     @Published var showOutline: Bool = false
+    @Published var recentFolders: [String] = []
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {
             UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
@@ -285,6 +286,29 @@ final class AppState: ObservableObject {
     
     var lastSavedAt: Date? {
         activeFile?.lastSavedAt
+    }
+    
+    var cursorLine: Int {
+        let nsText = currentText as NSString
+        let pos = min(selectionRange.location, nsText.length)
+        guard pos > 0 else { return 1 }
+        var line = 1
+        for i in 0..<pos {
+            if nsText.character(at: i) == 0x0A { line += 1 }
+        }
+        return line
+    }
+    
+    var cursorColumn: Int {
+        let nsText = currentText as NSString
+        let pos = min(selectionRange.location, nsText.length)
+        guard pos > 0 else { return 1 }
+        // Find start of current line
+        var lineStart = pos
+        while lineStart > 0 && nsText.character(at: lineStart - 1) != 0x0A {
+            lineStart -= 1
+        }
+        return pos - lineStart + 1
     }
     
     var deleteTargetName: String {
@@ -327,6 +351,7 @@ final class AppState: ObservableObject {
     func restoreLastRootIfPossible() {
         restoreAppearance()
         loadMarkdownDefaults()
+        loadRecentFolders()
         guard rootURL == nil else { return }
         guard let path = UserDefaults.standard.string(forKey: "lastRootPath") else { return }
         let url = URL(fileURLWithPath: path)
@@ -350,6 +375,7 @@ final class AppState: ObservableObject {
     func setRoot(_ url: URL) {
         rootURL = url
         UserDefaults.standard.set(url.path, forKey: "lastRootPath")
+        addRecentFolder(url.path)
         loadExpandedFolders(for: url)
         loadFolderCustomizations(for: url)
         reloadTree(selecting: nil)
@@ -1468,6 +1494,24 @@ final class AppState: ObservableObject {
     
     func initializeMarkdownDefaults() {
         loadMarkdownDefaults()
+    }
+    
+    // MARK: - Recent Folders
+    
+    private func loadRecentFolders() {
+        let paths = UserDefaults.standard.stringArray(forKey: "recentFolders") ?? []
+        // Filter out paths that no longer exist
+        recentFolders = paths.filter { FileManager.default.fileExists(atPath: $0) }
+    }
+    
+    private func addRecentFolder(_ path: String) {
+        var recents = UserDefaults.standard.stringArray(forKey: "recentFolders") ?? []
+        recents.removeAll { $0 == path }
+        recents.insert(path, at: 0)
+        // Keep only last 5
+        recents = Array(recents.prefix(5))
+        UserDefaults.standard.set(recents, forKey: "recentFolders")
+        recentFolders = recents.filter { FileManager.default.fileExists(atPath: $0) }
     }
 }
 
