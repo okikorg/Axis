@@ -187,22 +187,33 @@ private struct MainEditorView: View {
                     // Tab Bar
                     if !appState.openFiles.isEmpty {
                         TabBarView()
+                            .padding(.top, 4)
                     }
-                    
+
                     // Breadcrumb - minimal
                     if appState.activeFileURL != nil {
                         BreadcrumbView()
                     }
-                    
+
                     // Editor
                     EditorView()
-                    
+
                     // Status Bar - subtle
                     if appState.activeFileURL != nil {
                         StatusBarView()
                     }
                 }
                 .frame(maxWidth: .infinity)
+
+                // Right sidebar - document outline
+                if appState.showOutline && appState.activeFileURL != nil {
+                    Rectangle()
+                        .fill(Theme.Colors.divider)
+                        .frame(width: 1)
+
+                    OutlineView()
+                        .frame(width: outlineWidth(for: geo.size.width))
+                }
             }
         }
         .background(Theme.Colors.background)
@@ -213,6 +224,11 @@ private struct MainEditorView: View {
         let percentage: CGFloat = windowWidth < 800 ? 0.28 : 0.22
         let width = windowWidth * percentage
         return min(max(width, 160), 280)
+    }
+
+    private func outlineWidth(for windowWidth: CGFloat) -> CGFloat {
+        let width = windowWidth * 0.18
+        return min(max(width, 160), 240)
     }
 }
 

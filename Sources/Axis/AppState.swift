@@ -216,6 +216,15 @@ enum AppearanceMode: String, CaseIterable {
     }
 }
 
+// MARK: - Heading Item (for document outline)
+
+struct HeadingItem: Identifiable {
+    let id: Int          // line number (1-based)
+    let level: Int       // 1-6
+    let text: String     // heading content without # prefix
+    let location: Int    // character offset in text
+}
+
 // MARK: - App State
 
 final class AppState: ObservableObject {
@@ -241,6 +250,7 @@ final class AppState: ObservableObject {
     @Published var fullTextSearchMode: Bool = false
     @Published var customizingFolderURL: URL? = nil
     @Published var renamingNodeURL: URL? = nil
+    @Published var showOutline: Bool = false
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {
             UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
@@ -876,6 +886,61 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - Document Outline
+
+    private static let headingRegex = try! NSRegularExpression(
+        pattern: "^(#{1,6})\\s+(.+)$",
+        options: .anchorsMatchLines
+    )
+
+    var documentOutline: [HeadingItem] {
+        let nsText = currentText as NSString
+        guard nsText.length > 0 else { return [] }
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        var items: [HeadingItem] = []
+        Self.headingRegex.enumerateMatches(in: currentText, options: [], range: fullRange) { match, _, _ in
+            guard let match = match else { return }
+            let hashRange = match.range(at: 1)
+            let contentRange = match.range(at: 2)
+            let level = hashRange.length
+            let text = nsText.substring(with: contentRange)
+                .trimmingCharacters(in: .whitespaces)
+            // Compute line number from character offset
+            let offset = match.range.location
+            var ln = 1
+            for i in 0..<offset {
+                if nsText.character(at: i) == 0x0A { ln += 1 }
+            }
+            items.append(HeadingItem(id: ln, level: level, text: text, location: offset))
+        }
+        return items
+    }
+
+    func activeHeadingID() -> Int? {
+        let outline = documentOutline
+        guard !outline.isEmpty else { return nil }
+        let cursor = selectionRange.location
+        var active: HeadingItem?
+        for item in outline {
+            if item.location <= cursor {
+                active = item
+            } else {
+                break
+            }
+        }
+        return active?.id
+    }
+
+    func toggleOutline() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showOutline.toggle()
+        }
+    }
+
+    func navigateToHeading(_ heading: HeadingItem) {
+        navigateToLine(heading.id)
+    }
+
     func allMarkdownFiles() -> [URL] {
         guard let root = rootNode else { return [] }
         var files: [URL] = []
@@ -1217,6 +1282,62 @@ final class AppState: ObservableObject {
             let block = "\(prefix)```\n\n```"
             applyEdit(range: safeSel, replacement: block, newSelection: NSRange(location: loc + prefix.count + 3, length: 0))
         }
+    }
+
+    // MARK: - Insert Image
+
+    func insertImage() {
+        guard let activeURL = activeFileURL else { return }
+
+        let panel = NSOpenPanel()
+        panel.title = "Choose an image"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [
+            .png, .jpeg, .gif, .tiff, .webP, .heic, .bmp, .svg
+        ]
+
+        guard panel.runModal() == .OK, let imageURL = panel.url else { return }
+
+        let dir = activeURL.deletingLastPathComponent()
+        let imagePath = imageURL.path
+        let dirPath = dir.path
+
+        let relativePath: String
+        if imagePath.hasPrefix(dirPath + "/") {
+            // Already in workspace
+            relativePath = String(imagePath.dropFirst(dirPath.count + 1))
+        } else {
+            // Copy to images/ subdirectory
+            let imagesDir = dir.appendingPathComponent("images")
+            try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+
+            var destURL = imagesDir.appendingPathComponent(imageURL.lastPathComponent)
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                let name = (imageURL.lastPathComponent as NSString).deletingPathExtension
+                let ext = imageURL.pathExtension
+                let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+                destURL = imagesDir.appendingPathComponent("\(name)-\(timestamp).\(ext)")
+            }
+
+            do {
+                try FileManager.default.copyItem(at: imageURL, to: destURL)
+            } catch {
+                print("Failed to copy image: \(error)")
+                return
+            }
+            relativePath = "images/\(destURL.lastPathComponent)"
+        }
+
+        let name = (imageURL.lastPathComponent as NSString).deletingPathExtension
+        let nsText = currentText as NSString
+        let loc = min(selectionRange.location, nsText.length)
+        let needsNewline = loc > 0 && nsText.character(at: loc - 1) != 0x0A
+        let prefix = needsNewline ? "\n" : ""
+        let markdown = "\(prefix)![\(name)](\(relativePath))\n"
+        let insertRange = NSRange(location: loc, length: selectionRange.length)
+        applyEdit(range: insertRange, replacement: markdown, newSelection: NSRange(location: loc + markdown.count, length: 0))
     }
 
     // MARK: - Folder Expansion

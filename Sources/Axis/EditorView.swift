@@ -1,6 +1,20 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Inline Image Custom Attribute
+
+extension NSAttributedString.Key {
+    static let inlineImageInfo = NSAttributedString.Key("com.axis.inlineImageInfo")
+}
+
+struct InlineImageInfo {
+    let path: String
+    let baseURL: URL?
+    let maxWidth: CGFloat
+    let displayHeight: CGFloat
+    let image: NSImage?
+}
+
 struct EditorView: View {
     @EnvironmentObject private var appState: AppState
 
@@ -192,8 +206,8 @@ private struct EditorTextView: View {
             currentMatchIndex: appState.currentMatchIndex,
             appState: appState
         )
-        .padding(.horizontal, Theme.Spacing.xl)
-        .padding(.vertical, Theme.Spacing.m)
+        .padding(.horizontal, Theme.Spacing.xxxl)
+        .padding(.vertical, Theme.Spacing.xl)
     }
 }
 
@@ -217,6 +231,7 @@ private class CheckboxLayoutManager: NSLayoutManager {
         // Expand to full lines so ^ anchor matches correctly
         let charRange = nsText.lineRange(for: rawRange)
 
+        // Draw checkboxes
         Self.checkboxRegex.enumerateMatches(in: nsText as String, range: charRange) { result, _, _ in
             guard let match = result else { return }
 
@@ -239,6 +254,92 @@ private class CheckboxLayoutManager: NSLayoutManager {
 
             self.drawCheckbox(in: rect, checked: isChecked)
         }
+
+        // Draw inline images
+        storage.enumerateAttribute(.inlineImageInfo, in: charRange, options: []) { value, range, _ in
+            guard let info = value as? InlineImageInfo else { return }
+
+            // Get the bounding rect of the line
+            let lineGlyphRange = self.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            guard lineGlyphRange.location != NSNotFound else { return }
+            let lineRect = self.boundingRect(forGlyphRange: lineGlyphRange, in: tc)
+                .offsetBy(dx: origin.x, dy: origin.y)
+
+            let imageY = lineRect.maxY + 8
+
+            if let nsImage = info.image {
+                // Draw the actual image
+                let cached = InlineImageCache.shared.image(
+                    for: info.path, baseURL: info.baseURL, maxWidth: info.maxWidth
+                )
+                let drawSize = cached?.displaySize ?? NSSize(width: info.maxWidth, height: info.displayHeight)
+                let imageRect = NSRect(
+                    x: lineRect.minX,
+                    y: imageY,
+                    width: drawSize.width,
+                    height: drawSize.height
+                )
+
+                NSGraphicsContext.saveGraphicsState()
+                let clipPath = NSBezierPath(roundedRect: imageRect, xRadius: 6, yRadius: 6)
+                clipPath.addClip()
+                nsImage.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+                NSGraphicsContext.restoreGraphicsState()
+
+                // Subtle border
+                NSGraphicsContext.saveGraphicsState()
+                let borderPath = NSBezierPath(roundedRect: imageRect, xRadius: 6, yRadius: 6)
+                NSColor.separatorColor.setStroke()
+                borderPath.lineWidth = 0.5
+                borderPath.stroke()
+                NSGraphicsContext.restoreGraphicsState()
+            } else {
+                // Draw compact placeholder
+                self.drawImagePlaceholder(at: NSPoint(x: lineRect.minX, y: imageY), filename: info.path)
+            }
+        }
+    }
+
+    private func drawImagePlaceholder(at point: NSPoint, filename: String) {
+        NSGraphicsContext.saveGraphicsState()
+
+        let displayName = (filename as NSString).lastPathComponent
+        let font = NSFont.systemFont(ofSize: 11)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        let textSize = (displayName as NSString).size(withAttributes: attrs)
+
+        let iconSize: CGFloat = 12
+        let padding: CGFloat = 4
+        let totalWidth = iconSize + padding + textSize.width + padding * 2
+        let height: CGFloat = 16
+
+        let bgRect = NSRect(x: point.x, y: point.y, width: totalWidth, height: height)
+        let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: 3, yRadius: 3)
+        NSColor.quaternaryLabelColor.setFill()
+        bgPath.fill()
+
+        // SF Symbol "photo" icon
+        if let iconImage = NSImage(systemSymbolName: "photo", accessibilityDescription: nil) {
+            let iconRect = NSRect(
+                x: point.x + padding,
+                y: point.y + (height - iconSize) / 2,
+                width: iconSize,
+                height: iconSize
+            )
+            iconImage.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 0.6)
+        }
+
+        // Filename text
+        let textPoint = NSPoint(
+            x: point.x + padding + iconSize + padding,
+            y: point.y + (height - textSize.height) / 2
+        )
+        (displayName as NSString).draw(at: textPoint, withAttributes: attrs)
+
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawCheckbox(in rect: CGRect, checked: Bool) {
@@ -279,6 +380,63 @@ private class CheckboxLayoutManager: NSLayoutManager {
     }
 }
 
+// MARK: - Image-Aware Text View (subclass for drag-and-drop)
+
+private class ImageAwareTextView: NSTextView {
+    weak var coordinator: HighlightingTextEditor.Coordinator?
+
+    private static let imageTypes: Set<NSPasteboard.PasteboardType> = [
+        .tiff, .png,
+        NSPasteboard.PasteboardType("public.jpeg"),
+        NSPasteboard.PasteboardType("public.heic"),
+        NSPasteboard.PasteboardType("com.compuserve.gif"),
+        NSPasteboard.PasteboardType("public.webp"),
+    ]
+
+    override func paste(_ sender: Any?) {
+        let pb = NSPasteboard.general
+
+        // Check if the pasteboard's primary content is image data.
+        // The types array is ordered by the source app's preference.
+        // If an image type appears before .string, treat it as an image paste.
+        if let activeURL = coordinator?.parent.appState.activeFileURL,
+           let types = pb.types {
+            let stringIndex = types.firstIndex(of: .string) ?? types.endIndex
+            let hasImageBeforeString = types.prefix(upTo: stringIndex).contains(where: { Self.imageTypes.contains($0) })
+
+            if hasImageBeforeString,
+               let imageData = pb.data(forType: .png) ?? pb.data(forType: .tiff) {
+                if let relativePath = HighlightingTextEditor.Coordinator.saveImageData(imageData, near: activeURL) {
+                    let markdown = "![image](\(relativePath))"
+                    let sel = selectedRange()
+                    insertText(markdown, replacementRange: sel)
+                    return
+                }
+            }
+        }
+
+        super.paste(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if let coord = coordinator, coord.performDragOperation(for: self, draggingInfo: sender) {
+            return true
+        }
+        return super.performDragOperation(sender)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let pb = sender.draggingPasteboard
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] {
+            let imageExts: Set<String> = ["png", "jpg", "jpeg", "gif", "tiff", "tif", "webp", "heic", "heif", "bmp", "svg"]
+            if urls.contains(where: { imageExts.contains($0.pathExtension.lowercased()) }) {
+                return .copy
+            }
+        }
+        return super.draggingEntered(sender)
+    }
+}
+
 // MARK: - Highlighting Text Editor (NSViewRepresentable)
 
 private struct HighlightingTextEditor: NSViewRepresentable {
@@ -294,8 +452,29 @@ private struct HighlightingTextEditor: NSViewRepresentable {
     }
     
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        let textView = scrollView.documentView as! NSTextView
+        // Build the entire text system from scratch to avoid ownership issues
+        // when using a custom NSTextView subclass. Using scrollableTextView()
+        // and then stealing its textContainer causes the original text view's
+        // dealloc to corrupt the text system.
+        let textStorage = NSTextStorage()
+        let checkboxLM = CheckboxLayoutManager()
+        checkboxLM.allowsNonContiguousLayout = true
+        textStorage.addLayoutManager(checkboxLM)
+
+        let textContainer = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        textContainer.widthTracksTextView = true
+        textContainer.lineFragmentPadding = 0
+        checkboxLM.addTextContainer(textContainer)
+
+        let textView = ImageAwareTextView(frame: .zero, textContainer: textContainer)
+        textView.coordinator = context.coordinator
+
+        // Critical sizing properties (normally set by scrollableTextView())
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.minSize = NSSize(width: 0, height: 0)
 
         // Configure text view
         textView.isEditable = true
@@ -315,15 +494,15 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         ]
 
         // Text container settings
-        textView.textContainerInset = NSSize(width: 0, height: 8)
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = true
+        textView.textContainerInset = NSSize(width: 0, height: 16)
 
-        // Scroll view settings
+        // Scroll view
+        let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
+        scrollView.documentView = textView
 
         // Ghost text label for inline autocomplete
         let ghostLabel = NSTextField(labelWithString: "")
@@ -336,18 +515,6 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         textView.addSubview(ghostLabel)
         context.coordinator.ghostLabel = ghostLabel
 
-        // Replace layout manager with custom checkbox-rendering one
-        let textContainer = textView.textContainer!
-        let textStorage = textView.textStorage!
-        if let oldLM = textView.layoutManager {
-            oldLM.removeTextContainer(at: 0)
-            textStorage.removeLayoutManager(oldLM)
-        }
-        let checkboxLM = CheckboxLayoutManager()
-        checkboxLM.allowsNonContiguousLayout = true
-        textStorage.addLayoutManager(checkboxLM)
-        checkboxLM.addTextContainer(textContainer)
-
         // Set delegate
         textView.delegate = context.coordinator
 
@@ -359,14 +526,26 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         checkboxGesture.delegate = context.coordinator
         textView.addGestureRecognizer(checkboxGesture)
 
+        // Register for image file drag-and-drop
+        textView.registerForDraggedTypes([.fileURL])
+
         // Store reference so AppState can apply undo-safe edits directly
         appState.editorTextView = textView
 
         return scrollView
     }
-    
+
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
+
+        // Track container width changes for image rescaling
+        let currentWidth = textView.textContainer?.size.width ?? 0
+        if abs(currentWidth - context.coordinator.lastContainerWidth) > 1 {
+            context.coordinator.lastContainerWidth = currentWidth
+            if context.coordinator.lastContainerWidth > 0 {
+                InlineImageCache.shared.invalidateAll()
+            }
+        }
 
         // Update text if changed externally (e.g. formatting commands from AppState)
         // Use direct assignment with undo disabled — this keeps NSTextView's
@@ -617,6 +796,42 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             storage.addAttribute(.foregroundColor, value: mutedColor, range: fullRange)
             let altRange = match.range(at: 2)
             storage.addAttribute(.foregroundColor, value: secondaryColor, range: altRange)
+
+            // Resolve image and add paragraph spacing for inline display
+            let imagePath = nsText.substring(with: match.range(at: 5))
+
+            // Skip remote URLs
+            guard !imagePath.hasPrefix("http://"), !imagePath.hasPrefix("https://") else { return }
+
+            let lineRange = nsText.lineRange(for: fullRange)
+            let containerWidth = storage.length > 0
+                ? (appState.editorTextView?.textContainer?.size.width ?? 600) - 20
+                : 600
+
+            let cached = InlineImageCache.shared.image(for: imagePath, baseURL: appState.activeFileURL, maxWidth: containerWidth)
+
+            let displayHeight: CGFloat
+            let image: NSImage?
+            if let cached = cached {
+                displayHeight = cached.displaySize.height
+                image = cached.image
+            } else {
+                displayHeight = 16 // compact placeholder
+                image = nil
+            }
+
+            let info = InlineImageInfo(
+                path: imagePath,
+                baseURL: appState.activeFileURL,
+                maxWidth: containerWidth,
+                displayHeight: displayHeight,
+                image: image
+            )
+            storage.addAttribute(.inlineImageInfo, value: info, range: lineRange)
+
+            let para = NSMutableParagraphStyle()
+            para.paragraphSpacing = displayHeight + 16
+            storage.addAttribute(.paragraphStyle, value: para, range: lineRange)
         }
 
         // Horizontal rules: --- or *** or ___ (3+ chars on a line alone)
@@ -936,6 +1151,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         var parent: HighlightingTextEditor
         var isUpdatingSelection = false
         var isUpdatingText = false
+        var lastContainerWidth: CGFloat = 0
 
         // Ghost text autocomplete
         var ghostLabel: NSTextField?
@@ -949,6 +1165,11 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         private static let unorderedPattern = try! NSRegularExpression(pattern: "^(\\s*[-*+])\\s", options: [])
         // Ordered: "  1. " or "  12. "
         private static let orderedPattern = try! NSRegularExpression(pattern: "^(\\s*)(\\d+)\\.\\s", options: [])
+
+        // Image file extensions for drag-and-drop/paste detection
+        private static let imageExtensions: Set<String> = [
+            "png", "jpg", "jpeg", "gif", "tiff", "tif", "webp", "heic", "heif", "bmp", "svg"
+        ]
 
         init(_ parent: HighlightingTextEditor) {
             self.parent = parent
@@ -1581,6 +1802,123 @@ private struct HighlightingTextEditor: NSViewRepresentable {
 
             candidates.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             return candidates.first
+        }
+
+        // MARK: - Image Drag-and-Drop
+
+        func textView(_ textView: NSTextView, draggedCell cell: NSTextAttachmentCellProtocol, in rect: NSRect, event: NSEvent, at charIndex: Int) {
+            // No-op: required by protocol
+        }
+
+        /// Handle dragged files: detect image files and insert markdown reference
+        func performDragOperation(for textView: NSTextView, draggingInfo info: NSDraggingInfo) -> Bool {
+            guard let activeURL = parent.appState.activeFileURL else { return false }
+            let pb = info.draggingPasteboard
+
+            guard let urls = pb.readObjects(forClasses: [NSURL.self], options: [
+                .urlReadingFileURLsOnly: true
+            ]) as? [URL] else { return false }
+
+            let imageURLs = urls.filter { Self.imageExtensions.contains($0.pathExtension.lowercased()) }
+            guard !imageURLs.isEmpty else { return false }
+
+            // Get drop location
+            let point = textView.convert(info.draggingLocation, from: nil)
+            let origin = textView.textContainerOrigin
+            let containerPoint = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
+            guard let lm = textView.layoutManager, let tc = textView.textContainer else { return false }
+            let charIndex = lm.characterIndex(for: containerPoint, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
+
+            var insertions: [String] = []
+            for imageURL in imageURLs {
+                if let relativePath = Self.ensureImageInWorkspace(imageURL, near: activeURL) {
+                    let filename = (relativePath as NSString).lastPathComponent
+                    let name = (filename as NSString).deletingPathExtension
+                    insertions.append("![\(name)](\(relativePath))")
+                }
+            }
+
+            guard !insertions.isEmpty else { return false }
+
+            let markdown = insertions.joined(separator: "\n") + "\n"
+            let insertRange = NSRange(location: min(charIndex, (textView.string as NSString).length), length: 0)
+            textView.insertText(markdown, replacementRange: insertRange)
+            return true
+        }
+
+        // MARK: - Image File Helpers
+
+        /// Save raw image data (from clipboard) to the images/ subdirectory, returning the relative path
+        static func saveImageData(_ data: Data, near fileURL: URL) -> String? {
+            let dir = fileURL.deletingLastPathComponent()
+            let imagesDir = dir.appendingPathComponent("images")
+
+            // Ensure images/ directory exists
+            try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+
+            let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+            // Detect format from data header
+            let ext: String
+            if data.count >= 8, data.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+                ext = "png"
+            } else {
+                // Default: save as PNG from TIFF data
+                guard let bitmapRep = NSBitmapImageRep(data: data),
+                      let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
+                    return nil
+                }
+                let filename = "image-\(timestamp).png"
+                let destURL = imagesDir.appendingPathComponent(filename)
+                do {
+                    try pngData.write(to: destURL)
+                    return "images/\(filename)"
+                } catch {
+                    return nil
+                }
+            }
+
+            let filename = "image-\(timestamp).\(ext)"
+            let destURL = imagesDir.appendingPathComponent(filename)
+            do {
+                try data.write(to: destURL)
+                return "images/\(filename)"
+            } catch {
+                return nil
+            }
+        }
+
+        /// Ensure the image is in the workspace (copy if external), returning a relative path
+        static func ensureImageInWorkspace(_ imageURL: URL, near fileURL: URL) -> String? {
+            let dir = fileURL.deletingLastPathComponent()
+            let imagePath = imageURL.path
+            let dirPath = dir.path
+
+            // If image is already within the workspace directory, compute relative path
+            if imagePath.hasPrefix(dirPath + "/") {
+                return String(imagePath.dropFirst(dirPath.count + 1))
+            }
+
+            // Copy to images/ subdirectory
+            let imagesDir = dir.appendingPathComponent("images")
+            try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+
+            let filename = imageURL.lastPathComponent
+            var destURL = imagesDir.appendingPathComponent(filename)
+
+            // Avoid overwriting existing files
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                let name = (filename as NSString).deletingPathExtension
+                let ext = imageURL.pathExtension
+                let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+                destURL = imagesDir.appendingPathComponent("\(name)-\(timestamp).\(ext)")
+            }
+
+            do {
+                try FileManager.default.copyItem(at: imageURL, to: destURL)
+                return "images/\(destURL.lastPathComponent)"
+            } catch {
+                return nil
+            }
         }
     }
 }

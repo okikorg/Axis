@@ -88,6 +88,12 @@ struct CommandPaletteView: View {
         PaletteCommand(name: "Open Folder", shortcut: "Cmd+O") { state in
             state.pickRootFolder()
         },
+        PaletteCommand(name: "Insert Image", shortcut: "Cmd+Shift+I") { state in
+            state.insertImage()
+        },
+        PaletteCommand(name: "Toggle Outline", shortcut: "Cmd+Shift+O") { state in
+            state.toggleOutline()
+        },
     ]
 
     var body: some View {
@@ -200,6 +206,9 @@ struct CommandPaletteView: View {
                 guard let appState else { return }
                 let contentResults = self.searchContent(query: trimmed, appState: appState)
                 DispatchQueue.main.async {
+                    // Ensure the query hasn't changed since this search started
+                    let currentTrimmed = self.query.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard currentTrimmed == trimmed else { return }
                     self.results = contentResults
                     if self.selectedIndex >= self.results.count {
                         self.selectedIndex = max(0, self.results.count - 1)
@@ -237,6 +246,9 @@ struct CommandPaletteView: View {
             guard let appState else { return }
             let contentResults = searchContent(query: trimmed, appState: appState)
             DispatchQueue.main.async {
+                // Ensure the query hasn't changed since this search started
+                let currentTrimmed = self.query.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard currentTrimmed == trimmed else { return }
                 // Rebuild to maintain order: files, folders, commands, content
                 var updated: [PaletteResult] = []
                 updated.append(contentsOf: self.searchFiles(query: trimmed))
@@ -414,7 +426,15 @@ struct PaletteSearchField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != query {
+        // Compare against the field editor text when actively editing
+        // to avoid overwriting in-progress edits with a stale cell value
+        let currentText: String
+        if let editor = nsView.currentEditor() as? NSTextView {
+            currentText = editor.string
+        } else {
+            currentText = nsView.stringValue
+        }
+        if currentText != query {
             nsView.stringValue = query
         }
         context.coordinator.resultCount = resultCount
@@ -444,7 +464,12 @@ struct PaletteSearchField: NSViewRepresentable {
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField else { return }
-            query.wrappedValue = field.stringValue
+            // Read from the field editor for the most current text during editing
+            if let editor = field.currentEditor() as? NSTextView {
+                query.wrappedValue = editor.string
+            } else {
+                query.wrappedValue = field.stringValue
+            }
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {

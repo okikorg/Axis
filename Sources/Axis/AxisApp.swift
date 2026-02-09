@@ -32,6 +32,7 @@ struct AxisApp: App {
             ContentView()
                 .environmentObject(appState)
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             // Replace default Close command to close tab instead of window
             CommandGroup(replacing: .saveItem) {
@@ -124,6 +125,12 @@ struct AxisApp: App {
                     appState.insertLink()
                 }
                 .keyboardShortcut("k", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("Insert Image") {
+                    appState.insertImage()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(appState.activeFileURL == nil)
 
                 Button("Heading") {
@@ -231,6 +238,11 @@ struct AxisApp: App {
                 .keyboardShortcut("0", modifiers: [.command])
 
                 Divider()
+
+                Button("Toggle Outline") {
+                    appState.toggleOutline()
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
 
                 Button("Appearance: \(appState.appearanceMode.label)") {
                     appState.cycleAppearance()

@@ -96,7 +96,7 @@ private struct SidebarHeader: View {
             )
         }
         .padding(.horizontal, Theme.Spacing.l)
-        .padding(.top, Theme.Spacing.l)
+        .padding(.top, 38)
         .padding(.bottom, Theme.Spacing.m)
     }
 }
