@@ -244,6 +244,11 @@ struct AxisApp: App {
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
+                Button("Toggle Terminal") {
+                    appState.toggleTerminal()
+                }
+                .keyboardShortcut("j", modifiers: .command)
+
                 Button("Appearance: \(appState.appearanceMode.label)") {
                     appState.cycleAppearance()
                 }

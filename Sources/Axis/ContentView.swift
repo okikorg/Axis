@@ -239,51 +239,60 @@ private struct MainEditorView: View {
 
     var body: some View {
         GeometryReader { geo in
-            HStack(spacing: 0) {
-                // Sidebar - responsive width
-                if !appState.isDistractionFree {
-                    SidebarView()
-                        .frame(width: sidebarWidth(for: geo.size.width))
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    // Sidebar - responsive width
+                    if !appState.isDistractionFree {
+                        SidebarView()
+                            .frame(width: sidebarWidth(for: geo.size.width))
+                            .transition(.move(edge: .leading).combined(with: .opacity))
 
-                    // Subtle sidebar/editor divider
-                    Rectangle()
-                        .fill(Theme.Colors.divider)
-                        .frame(width: 1)
-                        .transition(.opacity)
+                        // Subtle sidebar/editor divider
+                        Rectangle()
+                            .fill(Theme.Colors.divider)
+                            .frame(width: 1)
+                            .transition(.opacity)
+                    }
+
+                    // Editor Area - seamless transition
+                    VStack(spacing: 0) {
+                        // Tab Bar
+                        if !appState.openFiles.isEmpty {
+                            TabBarView()
+                                .padding(.top, 4)
+                        }
+
+                        // Breadcrumb - minimal
+                        if appState.activeFileURL != nil {
+                            BreadcrumbView()
+                        }
+
+                        // Editor
+                        EditorView()
+
+                        // Status Bar - subtle
+                        if appState.activeFileURL != nil {
+                            StatusBarView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    // Right sidebar - document outline
+                    if appState.showOutline && appState.activeFileURL != nil {
+                        Rectangle()
+                            .fill(Theme.Colors.divider)
+                            .frame(width: 1)
+
+                        OutlineView()
+                            .frame(width: outlineWidth(for: geo.size.width))
+                    }
                 }
-                
-                // Editor Area - seamless transition
-                VStack(spacing: 0) {
-                    // Tab Bar
-                    if !appState.openFiles.isEmpty {
-                        TabBarView()
-                            .padding(.top, 4)
-                    }
+                .frame(maxHeight: .infinity)
 
-                    // Breadcrumb - minimal
-                    if appState.activeFileURL != nil {
-                        BreadcrumbView()
-                    }
-
-                    // Editor
-                    EditorView()
-
-                    // Status Bar - subtle
-                    if appState.activeFileURL != nil {
-                        StatusBarView()
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                // Right sidebar - document outline
-                if appState.showOutline && appState.activeFileURL != nil {
-                    Rectangle()
-                        .fill(Theme.Colors.divider)
-                        .frame(width: 1)
-
-                    OutlineView()
-                        .frame(width: outlineWidth(for: geo.size.width))
+                // Terminal panel
+                if appState.showTerminal {
+                    TerminalPanelView()
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }

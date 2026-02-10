@@ -285,6 +285,7 @@ private let allCommands: [PaletteCommand] = [
         withAnimation(.easeInOut(duration: 0.2)) { state.isDistractionFree.toggle() }
     },
     PaletteCommand(id: "outline", name: "Toggle Outline", category: .view, shortcut: "Cmd+Shift+O", icon: "list.bullet.indent") { $0.toggleOutline() },
+    PaletteCommand(id: "terminal", name: "Toggle Terminal", category: .view, shortcut: "Cmd+J", icon: "terminal") { $0.toggleTerminal() },
     PaletteCommand(id: "line-wrap", name: "Toggle Line Wrap", category: .view, shortcut: "Cmd+Shift+L", icon: "text.word.spacing") { $0.isLineWrapping.toggle() },
     PaletteCommand(id: "zoom-in", name: "Zoom In", category: .view, shortcut: "Cmd++", icon: "plus.magnifyingglass") { $0.zoomIn() },
     PaletteCommand(id: "zoom-out", name: "Zoom Out", category: .view, shortcut: "Cmd+-", icon: "minus.magnifyingglass") { $0.zoomOut() },
@@ -531,6 +532,26 @@ struct CommandPaletteView: View {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // Escape
                 DispatchQueue.main.async { dismiss() }
+                return nil
+            }
+            if event.keyCode == 126 { // Up arrow
+                DispatchQueue.main.async {
+                    if results.count > 0 {
+                        selectedIndex = (selectedIndex - 1 + results.count) % results.count
+                    }
+                }
+                return nil
+            }
+            if event.keyCode == 125 { // Down arrow
+                DispatchQueue.main.async {
+                    if results.count > 0 {
+                        selectedIndex = (selectedIndex + 1) % results.count
+                    }
+                }
+                return nil
+            }
+            if event.keyCode == 36 { // Return
+                DispatchQueue.main.async { executeSelected() }
                 return nil
             }
             return event

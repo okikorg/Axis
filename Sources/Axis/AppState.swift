@@ -251,6 +251,7 @@ final class AppState: ObservableObject {
     @Published var customizingFolderURL: URL? = nil
     @Published var renamingNodeURL: URL? = nil
     @Published var showOutline: Bool = true
+    @Published var showTerminal: Bool = false
     @Published var recentFolders: [String] = []
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {
@@ -264,6 +265,9 @@ final class AppState: ObservableObject {
     // replacing the full text via SwiftUI bindings, which would
     // destroy the undo stack.
     weak var editorTextView: NSTextView?
+
+    /// Holds the persistent terminal session so it survives show/hide toggles.
+    let terminalSession = TerminalSession()
 
     private var autosave = DebouncedAutosave()
     private var directoryMonitor: DirectoryMonitor?
@@ -960,6 +964,12 @@ final class AppState: ObservableObject {
     func toggleOutline() {
         withAnimation(.easeInOut(duration: 0.2)) {
             showOutline.toggle()
+        }
+    }
+
+    func toggleTerminal() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showTerminal.toggle()
         }
     }
 

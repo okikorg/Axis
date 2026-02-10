@@ -183,6 +183,7 @@ enum Theme {
         static let iconSmall: CGFloat = 14
         static let iconMedium: CGFloat = 16
         static let iconLarge: CGFloat = 18
+        static let terminalPanelHeight: CGFloat = 220
     }
 }
 
