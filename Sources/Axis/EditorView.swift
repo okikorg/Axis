@@ -248,7 +248,7 @@ private struct EditorTextView: View {
 
 private class CheckboxLayoutManager: NSLayoutManager {
     private static let checkboxRegex = try! NSRegularExpression(
-        pattern: "^(\\s*[-*+]\\s)(\\[)([ xX])(\\])",
+        pattern: "^(\\s*)([-*+]\\s\\[)([ xX])(\\])",
         options: .anchorsMatchLines
     )
 
@@ -268,24 +268,38 @@ private class CheckboxLayoutManager: NSLayoutManager {
         Self.checkboxRegex.enumerateMatches(in: nsText as String, range: charRange) { result, _, _ in
             guard let match = result else { return }
 
-            let bracketOpen = match.range(at: 2)
-            let checkChar = match.range(at: 3)
-            let bracketClose = match.range(at: 4)
+            let leadingWS = match.range(at: 1)
+            let checkCharRange = match.range(at: 3)
 
-            let fullRange = NSRange(
-                location: bracketOpen.location,
-                length: bracketClose.location + bracketClose.length - bracketOpen.location
-            )
-
-            let ch = nsText.substring(with: checkChar)
+            let ch = nsText.substring(with: checkCharRange)
             let isChecked = ch == "x" || ch == "X"
 
-            let gr = self.glyphRange(forCharacterRange: fullRange, actualCharacterRange: nil)
-            guard gr.location != NSNotFound else { return }
-            let rect = self.boundingRect(forGlyphRange: gr, in: tc)
-                .offsetBy(dx: origin.x, dy: origin.y)
+            // Use line fragment rect for vertical bounds and line height
+            let firstGlyph = self.glyphRange(forCharacterRange: NSRange(location: match.range.location, length: 1), actualCharacterRange: nil)
+            guard firstGlyph.location != NSNotFound else { return }
+            let lineFragRect = self.lineFragmentUsedRect(forGlyphAt: firstGlyph.location, effectiveRange: nil)
 
-            self.drawCheckbox(in: rect, checked: isChecked)
+            // x position: right after leading whitespace
+            var xPos: CGFloat
+            if leadingWS.length > 0 {
+                let wsGlyphs = self.glyphRange(forCharacterRange: leadingWS, actualCharacterRange: nil)
+                if wsGlyphs.location != NSNotFound {
+                    let wsRect = self.boundingRect(forGlyphRange: wsGlyphs, in: tc)
+                    xPos = wsRect.maxX
+                } else {
+                    xPos = lineFragRect.minX
+                }
+            } else {
+                xPos = lineFragRect.minX
+            }
+
+            let checkboxRect = CGRect(
+                x: xPos + origin.x,
+                y: lineFragRect.minY + origin.y,
+                width: lineFragRect.height,
+                height: lineFragRect.height
+            )
+            self.drawCheckbox(in: checkboxRect, checked: isChecked)
         }
 
         // Draw inline images
@@ -901,19 +915,20 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         }
 
         // Task lists: - [ ] or - [x] — visual checkboxes drawn by CheckboxLayoutManager
-        applyLinePattern(storage: storage, nsText: nsText, pattern: "^(\\s*)([-*+]\\s)(\\[)([ xX])(\\])\\s(.*)$") { match in
-            let bulletRange = match.range(at: 2)
-            let bracketOpen = match.range(at: 3)
-            let checkChar = match.range(at: 4)
-            let bracketClose = match.range(at: 5)
-            let contentRange = match.range(at: 6)
+        applyLinePattern(storage: storage, nsText: nsText, pattern: "^(\\s*)([-*+]\\s\\[)([ xX])(\\]\\s)(.*)$") { match in
+            let prefixRange = match.range(at: 2)   // bullet through open bracket
+            let checkChar = match.range(at: 3)
+            let suffixRange = match.range(at: 4)   // close bracket + space
+            let contentRange = match.range(at: 5)
             let ch = nsText.substring(with: checkChar)
             let isChecked = ch == "x" || ch == "X"
-            // Hide bullet and brackets — checkbox shape is drawn by the layout manager
-            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: bulletRange)
-            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: bracketOpen)
-            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: checkChar)
-            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: bracketClose)
+            // Collapse entire prefix to near-zero width — checkbox drawn by layout manager
+            let hiddenRange = NSRange(
+                location: prefixRange.location,
+                length: suffixRange.location + suffixRange.length - prefixRange.location
+            )
+            storage.addAttribute(.font, value: NSFont.systemFont(ofSize: 0.01), range: hiddenRange)
+            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: hiddenRange)
             // Dim and strikethrough completed items
             if isChecked && contentRange.length > 0 {
                 storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: contentRange)
@@ -1592,7 +1607,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         // MARK: - Checkbox Click Handling
 
         private static let checkboxHitRegex = try! NSRegularExpression(
-            pattern: "^(\\s*[-*+]\\s)(\\[)([ xX])(\\])",
+            pattern: "^(\\s*)([-*+]\\s\\[[ xX]\\])",
             options: .anchorsMatchLines
         )
 
@@ -1621,9 +1636,11 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             guard let match = Self.checkboxHitRegex.firstMatch(
                 in: line, range: NSRange(location: 0, length: (line as NSString).length)
             ) else { return false }
-            let checkStart = lineRange.location + match.range(at: 2).location
-            let checkEnd = lineRange.location + match.range(at: 4).location + match.range(at: 4).length
-            return charIndex >= checkStart && charIndex < checkEnd
+            // Hit area covers the entire collapsed prefix (bullet + brackets)
+            let prefixRange = match.range(at: 2)
+            let hitStart = lineRange.location + prefixRange.location
+            let hitEnd = hitStart + prefixRange.length
+            return charIndex >= hitStart && charIndex < hitEnd
         }
 
         private func toggleCheckboxAt(_ point: NSPoint, in textView: NSTextView) {
