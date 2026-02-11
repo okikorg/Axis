@@ -263,21 +263,28 @@ private class CheckboxLayoutManager: NSLayoutManager {
         guard nsText.length > 0 else { return }
         let charRange = nsText.lineRange(for: rawRange)
 
-        // Draw checkboxes
+        // Draw checkboxes (always shown, even on cursor line)
         Self.checkboxRegex.enumerateMatches(in: nsText as String, range: charRange) { result, _, _ in
             guard let match = result else { return }
+
+            let bracketOpen = match.range(at: 2)
             let checkChar = match.range(at: 3)
+            let bracketClose = match.range(at: 4)
+
+            let fullRange = NSRange(
+                location: bracketOpen.location,
+                length: bracketClose.location + bracketClose.length - bracketOpen.location
+            )
+
             let ch = nsText.substring(with: checkChar)
             let isChecked = ch == "x" || ch == "X"
 
-            // Use the line fragment rect for vertical positioning
-            let lineCharRange = nsText.lineRange(for: match.range)
-            let lineGlyphRange = self.glyphRange(forCharacterRange: lineCharRange, actualCharacterRange: nil)
-            guard lineGlyphRange.location != NSNotFound else { return }
-            let lineRect = self.lineFragmentRect(forGlyphAt: lineGlyphRange.location, effectiveRange: nil)
+            let gr = self.glyphRange(forCharacterRange: fullRange, actualCharacterRange: nil)
+            guard gr.location != NSNotFound else { return }
+            let rect = self.boundingRect(forGlyphRange: gr, in: tc)
                 .offsetBy(dx: origin.x, dy: origin.y)
 
-            self.drawCheckbox(in: lineRect, checked: isChecked)
+            self.drawCheckbox(in: rect, checked: isChecked)
         }
 
         // Draw inline images
@@ -368,26 +375,40 @@ private class CheckboxLayoutManager: NSLayoutManager {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func drawCheckbox(in lineRect: CGRect, checked: Bool) {
-        let size: CGFloat = min(lineRect.height * 0.65, 13)
+    private func drawCheckbox(in rect: CGRect, checked: Bool) {
+        let size = min(rect.height * 0.65, 14)
         let box = CGRect(
-            x: lineRect.minX + 2,
-            y: lineRect.midY - size / 2,
+            x: rect.midX - size / 2,
+            y: rect.midY - size / 2,
             width: size,
             height: size
         ).integral
 
         NSGraphicsContext.saveGraphicsState()
+
         let path = NSBezierPath(roundedRect: box, xRadius: 3, yRadius: 3)
 
         if checked {
             NSColor.controlAccentColor.setFill()
             path.fill()
+
+            // Checkmark
+            let i = size * 0.25
+            let check = NSBezierPath()
+            check.move(to: NSPoint(x: box.minX + i, y: box.midY))
+            check.line(to: NSPoint(x: box.midX - 1, y: box.maxY - i))
+            check.line(to: NSPoint(x: box.maxX - i, y: box.minY + i))
+            NSColor.white.setStroke()
+            check.lineWidth = 1.5
+            check.lineCapStyle = .round
+            check.lineJoinStyle = .round
+            check.stroke()
         } else {
             NSColor.tertiaryLabelColor.setStroke()
             path.lineWidth = 1.5
             path.stroke()
         }
+
         NSGraphicsContext.restoreGraphicsState()
     }
 }
@@ -405,11 +426,37 @@ private class ImageAwareTextView: NSTextView {
         NSPasteboard.PasteboardType("public.webp"),
     ]
 
+    // isRichText=false limits readablePasteboardTypes to plain text,
+    // which makes macOS disable Cmd+V when the clipboard has only image
+    // data.  Advertise image types so the paste action stays enabled.
+    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        var types = super.readablePasteboardTypes
+        for t in Self.imageTypes where !types.contains(t) {
+            types.append(t)
+        }
+        return types
+    }
+
+    // Intercept Cmd+V directly so image paste works even if the
+    // menu system still considers the Paste item disabled.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command, event.charactersIgnoringModifiers == "v" {
+            self.paste(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func paste(_ sender: Any?) {
         let pb = NSPasteboard.general
 
+        let hasActiveURL = coordinator?.parent.appState.activeFileURL != nil
+        let canReadImage = pb.canReadObject(forClasses: [NSImage.self], options: nil)
+        print("[Paste] activeURL=\(hasActiveURL), canReadImage=\(canReadImage), types=\(pb.types ?? [])")
+
         if let activeURL = coordinator?.parent.appState.activeFileURL,
-           pb.canReadObject(forClasses: [NSImage.self], options: nil) {
+           canReadImage {
 
             // Only treat as image paste when the pasteboard does NOT carry
             // meaningful plain-text (browsers attach the image src URL as text;
@@ -422,18 +469,25 @@ private class ImageAwareTextView: NSTextView {
                 stringIsTextContent = !trimmed.isEmpty
                     && !trimmed.hasPrefix("http://")
                     && !trimmed.hasPrefix("https://")
+                print("[Paste] string on pb: '\(trimmed.prefix(100))', isTextContent=\(stringIsTextContent)")
             } else {
                 stringIsTextContent = false
             }
 
-            if !stringIsTextContent,
-               let image = NSImage(pasteboard: pb),
-               let pngData = image.pngDataCorrectOrientation(),
-               let relativePath = HighlightingTextEditor.Coordinator.saveImageData(pngData, near: activeURL) {
-                let markdown = "![image](\(relativePath))"
-                let sel = selectedRange()
-                insertText(markdown, replacementRange: sel)
-                return
+            if !stringIsTextContent {
+                let image = NSImage(pasteboard: pb)
+                let pngData = image?.pngDataCorrectOrientation()
+                let relativePath = pngData.flatMap {
+                    HighlightingTextEditor.Coordinator.saveImageData($0, near: activeURL)
+                }
+                print("[Paste] image=\(image != nil), pngData=\(pngData != nil), path=\(relativePath ?? "nil")")
+
+                if let relativePath = relativePath {
+                    let markdown = "![image](\(relativePath))"
+                    let sel = selectedRange()
+                    insertText(markdown, replacementRange: sel)
+                    return
+                }
             }
         }
 
@@ -969,27 +1023,22 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             storage.addAttribute(.foregroundColor, value: NSColor(Theme.Colors.mdLink), range: numRange)
         }
 
-        // Task lists: - [ ] or - [x] — bullet + brackets hidden, visual box drawn by layout manager
-        applyLinePattern(storage: storage, nsText: nsText, pattern: "^(\\s*)([-*+]\\s)(\\[)([ xX])(\\])(\\s)?(.*)$") { match in
+        // Task lists: - [ ] or - [x] — visual checkboxes drawn by CheckboxLayoutManager
+        applyLinePattern(storage: storage, nsText: nsText, pattern: "^(\\s*)([-*+]\\s)(\\[)([ xX])(\\])\\s(.*)$") { match in
             let bulletRange = match.range(at: 2)
             let bracketOpen = match.range(at: 3)
             let checkChar = match.range(at: 4)
             let bracketClose = match.range(at: 5)
-            let spaceAfter = match.range(at: 6)
-            let contentRange = match.range(at: 7)
+            let contentRange = match.range(at: 6)
             let ch = nsText.substring(with: checkChar)
             let isChecked = ch == "x" || ch == "X"
-
-            // Collapse bullet, brackets, and gap space to zero-width
-            hideMarkdownSyntax(storage: storage, range: bulletRange)
-            hideMarkdownSyntax(storage: storage, range: bracketOpen)
-            hideMarkdownSyntax(storage: storage, range: checkChar)
-            hideMarkdownSyntax(storage: storage, range: bracketClose)
-            if spaceAfter.location != NSNotFound {
-                hideMarkdownSyntax(storage: storage, range: spaceAfter)
-            }
-
-            if isChecked && contentRange.location != NSNotFound && contentRange.length > 0 {
+            // Hide bullet and brackets — checkbox shape is drawn by the layout manager
+            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: bulletRange)
+            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: bracketOpen)
+            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: checkChar)
+            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: bracketClose)
+            // Dim and strikethrough completed items
+            if isChecked && contentRange.length > 0 {
                 storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: contentRange)
                 storage.addAttribute(.foregroundColor, value: mutedColor, range: contentRange)
             }
@@ -1690,14 +1739,26 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let charIndex = lm.characterIndex(for: containerPoint, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
             let nsText = textView.string as NSString
             guard charIndex < nsText.length else { return false }
+
+            // Check that this line is a checkbox line
             let lineRange = nsText.lineRange(for: NSRange(location: charIndex, length: 0))
             let line = nsText.substring(with: lineRange)
             guard let match = Self.checkboxHitRegex.firstMatch(
                 in: line, range: NSRange(location: 0, length: (line as NSString).length)
             ) else { return false }
-            let checkStart = lineRange.location + match.range(at: 2).location
-            let checkEnd = lineRange.location + match.range(at: 4).location + match.range(at: 4).length
-            return charIndex >= checkStart && charIndex < checkEnd
+
+            // Skip if cursor is on this line (raw syntax shown, not checkbox visual)
+            let sel = textView.selectedRange()
+            let cursorLineRange = nsText.lineRange(for: NSRange(location: sel.location, length: 0))
+            if NSIntersectionRange(lineRange, cursorLineRange).length > 0 { return false }
+
+            // Hit test against the prefix bounding rect (where the checkbox is painted)
+            let prefixCharRange = NSRange(location: lineRange.location + match.range.location,
+                                          length: match.range.length)
+            let prefixGlyphRange = lm.glyphRange(forCharacterRange: prefixCharRange, actualCharacterRange: nil)
+            guard prefixGlyphRange.location != NSNotFound else { return false }
+            let prefixRect = lm.boundingRect(forGlyphRange: prefixGlyphRange, in: tc)
+            return prefixRect.contains(containerPoint)
         }
 
         private func toggleCheckboxAt(_ point: NSPoint, in textView: NSTextView) {

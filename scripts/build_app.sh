@@ -16,6 +16,11 @@ done
 
 cd "$ROOT_DIR"
 
+# --- Clean ---
+echo "Cleaning build cache..."
+swift package clean
+rm -rf .build/release
+
 # --- Build ---
 echo "Building $APP_NAME (release)..."
 swift build -c release

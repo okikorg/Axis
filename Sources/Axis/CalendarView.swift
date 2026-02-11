@@ -19,6 +19,7 @@ private struct CalendarHeader: View {
     @State private var isCloseHovering = false
     @State private var isPrevHovering = false
     @State private var isNextHovering = false
+    @State private var isTodayHovering = false
 
     private var monthYearLabel: String {
         let formatter = DateFormatter()
@@ -26,9 +27,14 @@ private struct CalendarHeader: View {
         return formatter.string(from: appState.calendarDate)
     }
 
+    private var isCurrentMonth: Bool {
+        let cal = Calendar.current
+        return cal.isDate(appState.calendarDate, equalTo: Date(), toGranularity: .month)
+    }
+
     var body: some View {
         HStack(spacing: Theme.Spacing.s) {
-            Text("Daily Notes")
+            Text("Daily")
                 .font(Theme.Fonts.sidebarHeader)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .lineLimit(1)
@@ -50,6 +56,24 @@ private struct CalendarHeader: View {
             }
             .buttonStyle(.plain)
             .onHover { isPrevHovering = $0 }
+
+            // Today
+            Button {
+                appState.calendarDate = Date()
+                appState.openDailyNote(for: Date())
+            } label: {
+                Text("Today")
+                    .font(Theme.Fonts.statusBar)
+                    .foregroundStyle(isTodayHovering ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
+                    .padding(.horizontal, Theme.Spacing.xs)
+                    .padding(.vertical, Theme.Spacing.xxs)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.small)
+                            .fill(isTodayHovering ? Theme.Colors.hover : Color.clear)
+                    )
+            }
+            .buttonStyle(.plain)
+            .onHover { isTodayHovering = $0 }
 
             // Next month
             Button {
