@@ -244,11 +244,11 @@ private struct EditorTextView: View {
     }
 }
 
-// MARK: - Checkbox Layout Manager
+// MARK: - Checkbox + Image Layout Manager
 
 private class CheckboxLayoutManager: NSLayoutManager {
     private static let checkboxRegex = try! NSRegularExpression(
-        pattern: "^(\\s*)([-*+]\\s\\[)([ xX])(\\])",
+        pattern: "^(\\s*[-*+]\\s)(\\[)([ xX])(\\])",
         options: .anchorsMatchLines
     )
 
@@ -261,45 +261,23 @@ private class CheckboxLayoutManager: NSLayoutManager {
         let rawRange = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         let nsText = storage.string as NSString
         guard nsText.length > 0 else { return }
-        // Expand to full lines so ^ anchor matches correctly
         let charRange = nsText.lineRange(for: rawRange)
 
         // Draw checkboxes
         Self.checkboxRegex.enumerateMatches(in: nsText as String, range: charRange) { result, _, _ in
             guard let match = result else { return }
-
-            let leadingWS = match.range(at: 1)
-            let checkCharRange = match.range(at: 3)
-
-            let ch = nsText.substring(with: checkCharRange)
+            let checkChar = match.range(at: 3)
+            let ch = nsText.substring(with: checkChar)
             let isChecked = ch == "x" || ch == "X"
 
-            // Use line fragment rect for vertical bounds and line height
-            let firstGlyph = self.glyphRange(forCharacterRange: NSRange(location: match.range.location, length: 1), actualCharacterRange: nil)
-            guard firstGlyph.location != NSNotFound else { return }
-            let lineFragRect = self.lineFragmentUsedRect(forGlyphAt: firstGlyph.location, effectiveRange: nil)
+            // Use the line fragment rect for vertical positioning
+            let lineCharRange = nsText.lineRange(for: match.range)
+            let lineGlyphRange = self.glyphRange(forCharacterRange: lineCharRange, actualCharacterRange: nil)
+            guard lineGlyphRange.location != NSNotFound else { return }
+            let lineRect = self.lineFragmentRect(forGlyphAt: lineGlyphRange.location, effectiveRange: nil)
+                .offsetBy(dx: origin.x, dy: origin.y)
 
-            // x position: right after leading whitespace
-            var xPos: CGFloat
-            if leadingWS.length > 0 {
-                let wsGlyphs = self.glyphRange(forCharacterRange: leadingWS, actualCharacterRange: nil)
-                if wsGlyphs.location != NSNotFound {
-                    let wsRect = self.boundingRect(forGlyphRange: wsGlyphs, in: tc)
-                    xPos = wsRect.maxX
-                } else {
-                    xPos = lineFragRect.minX
-                }
-            } else {
-                xPos = lineFragRect.minX
-            }
-
-            let checkboxRect = CGRect(
-                x: xPos + origin.x,
-                y: lineFragRect.minY + origin.y,
-                width: lineFragRect.height,
-                height: lineFragRect.height
-            )
-            self.drawCheckbox(in: checkboxRect, checked: isChecked)
+            self.drawCheckbox(in: lineRect, checked: isChecked)
         }
 
         // Draw inline images
@@ -390,40 +368,26 @@ private class CheckboxLayoutManager: NSLayoutManager {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func drawCheckbox(in rect: CGRect, checked: Bool) {
-        let size = min(rect.height * 0.65, 14)
+    private func drawCheckbox(in lineRect: CGRect, checked: Bool) {
+        let size: CGFloat = min(lineRect.height * 0.65, 13)
         let box = CGRect(
-            x: rect.midX - size / 2,
-            y: rect.midY - size / 2,
+            x: lineRect.minX + 2,
+            y: lineRect.midY - size / 2,
             width: size,
             height: size
         ).integral
 
         NSGraphicsContext.saveGraphicsState()
-
         let path = NSBezierPath(roundedRect: box, xRadius: 3, yRadius: 3)
 
         if checked {
             NSColor.controlAccentColor.setFill()
             path.fill()
-
-            // Checkmark
-            let i = size * 0.25
-            let check = NSBezierPath()
-            check.move(to: NSPoint(x: box.minX + i, y: box.midY))
-            check.line(to: NSPoint(x: box.midX - 1, y: box.maxY - i))
-            check.line(to: NSPoint(x: box.maxX - i, y: box.minY + i))
-            NSColor.white.setStroke()
-            check.lineWidth = 1.5
-            check.lineCapStyle = .round
-            check.lineJoinStyle = .round
-            check.stroke()
         } else {
             NSColor.tertiaryLabelColor.setStroke()
             path.lineWidth = 1.5
             path.stroke()
         }
-
         NSGraphicsContext.restoreGraphicsState()
     }
 }
@@ -639,6 +603,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
 
         let baseSize = 14.0 * zoomLevel
         let baseFont = RobotoMono.regular(size: baseSize)
+
         let textColor = NSColor(Theme.Colors.text)
         let mutedColor = NSColor(Theme.Colors.textMuted)
         let secondaryColor = NSColor(Theme.Colors.textSecondary)
@@ -664,8 +629,17 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             return
         }
 
+        // Compute cursor line range for live preview (reveal syntax on cursor line, hide elsewhere)
+        let cursorLineRange: NSRange
+        let tvSel = textView.selectedRange()
+        if tvSel.location <= (str as NSString).length {
+            cursorLineRange = (str as NSString).lineRange(for: tvSel)
+        } else {
+            cursorLineRange = NSRange(location: NSNotFound, length: 0)
+        }
+
         // -- WYSIWYM Markdown Styling --
-        applyMarkdownStyles(storage: storage, text: str, baseSize: baseSize, textColor: textColor, mutedColor: mutedColor, secondaryColor: secondaryColor)
+        applyMarkdownStyles(storage: storage, text: str, baseSize: baseSize, textColor: textColor, mutedColor: mutedColor, secondaryColor: secondaryColor, cursorLineRange: cursorLineRange)
 
         // Search highlighting (on top of markdown styles)
         if !searchQuery.isEmpty {
@@ -689,13 +663,33 @@ private struct HighlightingTextEditor: NSViewRepresentable {
 
         textView.undoManager?.enableUndoRegistration()
 
+        // Ensure glyph layout is fully computed before redraw so
+        // the layout manager gets valid metrics for all lines.
+        textView.layoutManager?.ensureLayout(forGlyphRange: NSRange(location: 0, length: textView.layoutManager?.numberOfGlyphs ?? 0))
+
+        // Force full redraw so cursor-aware live preview updates correctly
+        textView.needsDisplay = true
+
         // Update inline ghost text position (font may have changed with zoom)
         context.coordinator.updateGhostText(textView)
     }
 
     // MARK: - Markdown WYSIWYM Styling
 
-    private func applyMarkdownStyles(storage: NSTextStorage, text: String, baseSize: CGFloat, textColor: NSColor, mutedColor: NSColor, secondaryColor: NSColor) {
+    /// Collapse markdown syntax characters to zero-width so they don't occupy space.
+    private func hideMarkdownSyntax(storage: NSTextStorage, range: NSRange) {
+        storage.addAttribute(.font, value: NSFont.systemFont(ofSize: 0.01), range: range)
+        storage.addAttribute(.foregroundColor, value: NSColor.clear, range: range)
+    }
+
+    /// Check if a match range falls on the current cursor line(s).
+    private func isOnCursorLine(nsText: NSString, matchRange: NSRange, cursorLineRange: NSRange) -> Bool {
+        guard cursorLineRange.location != NSNotFound else { return false }
+        let matchLineRange = nsText.lineRange(for: matchRange)
+        return NSIntersectionRange(matchLineRange, cursorLineRange).length > 0
+    }
+
+    private func applyMarkdownStyles(storage: NSTextStorage, text: String, baseSize: CGFloat, textColor: NSColor, mutedColor: NSColor, secondaryColor: NSColor, cursorLineRange: NSRange) {
         let nsText = text as NSString
 
         // Heading sizes relative to base
@@ -710,13 +704,21 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let size = baseSize * headingSizes[level]
             let weight = headingWeights[level]
             let headingFont = weight == .bold ? RobotoMono.bold(size: size) : RobotoMono.medium(size: size)
-            // Dim the hash marks
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: hashRange)
             // Style the heading content
             storage.addAttributes([
                 .font: headingFont,
                 .foregroundColor: NSColor(Theme.Colors.mdHeading)
             ], range: contentRange)
+
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                // Dim the hash marks
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: hashRange)
+            } else {
+                // Hide hash marks + space between them and content
+                let hideRange = NSRange(location: hashRange.location, length: contentRange.location - hashRange.location)
+                hideMarkdownSyntax(storage: storage, range: hideRange)
+            }
         }
 
         // Fenced code blocks: ``` ... ``` with syntax highlighting
@@ -765,8 +767,14 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
             let font = RobotoMono.boldItalic(size: baseSize)
             storage.addAttribute(.font, value: font, range: contentRange)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
+            } else {
+                hideMarkdownSyntax(storage: storage, range: markerRange1)
+                hideMarkdownSyntax(storage: storage, range: markerRange2)
+            }
         }
 
         // Bold: **text** or __text__
@@ -776,8 +784,14 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
             let boldFont = RobotoMono.bold(size: baseSize)
             storage.addAttribute(.font, value: boldFont, range: contentRange)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
+            } else {
+                hideMarkdownSyntax(storage: storage, range: markerRange1)
+                hideMarkdownSyntax(storage: storage, range: markerRange2)
+            }
         }
 
         // Italic: *text* or _text_ (single, not inside ** or __)
@@ -787,8 +801,14 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
             let italicFont = RobotoMono.italic(size: baseSize)
             storage.addAttribute(.font, value: italicFont, range: contentRange)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange1)
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange2)
+            } else {
+                hideMarkdownSyntax(storage: storage, range: markerRange1)
+                hideMarkdownSyntax(storage: storage, range: markerRange2)
+            }
         }
 
         // Strikethrough: ~~text~~
@@ -798,8 +818,14 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let close = match.range(at: 3)
             storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: content)
             storage.addAttribute(.foregroundColor, value: secondaryColor, range: content)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: open)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: close)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: open)
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: close)
+            } else {
+                hideMarkdownSyntax(storage: storage, range: open)
+                hideMarkdownSyntax(storage: storage, range: close)
+            }
         }
 
         // Inline code: `text`
@@ -813,8 +839,14 @@ private struct HighlightingTextEditor: NSViewRepresentable {
                 .foregroundColor: NSColor(Theme.Colors.mdInlineCode),
                 .backgroundColor: NSColor(Theme.Colors.mdInlineCodeBg)
             ], range: content)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: open)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: close)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: open)
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: close)
+            } else {
+                hideMarkdownSyntax(storage: storage, range: open)
+                hideMarkdownSyntax(storage: storage, range: close)
+            }
         }
 
         // Blockquotes: lines starting with >
@@ -822,11 +854,19 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let quoteFont = RobotoMono.italic(size: baseSize)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange)
             storage.addAttributes([
                 .font: quoteFont,
                 .foregroundColor: secondaryColor
             ], range: contentRange)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: markerRange)
+            } else {
+                // Hide the > marker and the space after it
+                let hideEnd = contentRange.location
+                let hideRange = NSRange(location: markerRange.location, length: hideEnd - markerRange.location)
+                hideMarkdownSyntax(storage: storage, range: hideRange)
+            }
         }
 
         // Links: [text](url)
@@ -837,23 +877,38 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let openParen = match.range(at: 4)
             let url = match.range(at: 5)
             let closeParen = match.range(at: 6)
-            // Link text gets underline
+            // Link text always gets underline and color
             storage.addAttributes([
                 .foregroundColor: NSColor(Theme.Colors.mdLink),
                 .underlineStyle: NSUnderlineStyle.single.rawValue
             ], range: linkText)
-            // Dim the syntax
-            for r in [openBracket, closeBracket, openParen, url, closeParen] {
-                storage.addAttribute(.foregroundColor, value: mutedColor, range: r)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
+            if onCursor {
+                // Dim the syntax
+                for r in [openBracket, closeBracket, openParen, url, closeParen] {
+                    storage.addAttribute(.foregroundColor, value: mutedColor, range: r)
+                }
+            } else {
+                // Hide brackets and URL — show only link text
+                hideMarkdownSyntax(storage: storage, range: openBracket)
+                hideMarkdownSyntax(storage: storage, range: closeBracket)
+                let urlSyntax = NSRange(location: openParen.location, length: closeParen.location + closeParen.length - openParen.location)
+                hideMarkdownSyntax(storage: storage, range: urlSyntax)
             }
         }
 
         // Images: ![alt](url)
         applyPattern(storage: storage, nsText: nsText, pattern: "(!\\[)([^\\]]*)(\\])(\\()([^)]+)(\\))") { match in
             let fullRange = match.range(at: 0)
-            storage.addAttribute(.foregroundColor, value: mutedColor, range: fullRange)
             let altRange = match.range(at: 2)
-            storage.addAttribute(.foregroundColor, value: secondaryColor, range: altRange)
+            let onCursor = isOnCursorLine(nsText: nsText, matchRange: fullRange, cursorLineRange: cursorLineRange)
+            if onCursor {
+                storage.addAttribute(.foregroundColor, value: mutedColor, range: fullRange)
+                storage.addAttribute(.foregroundColor, value: secondaryColor, range: altRange)
+            } else {
+                // Hide entire image markdown — the image itself is drawn by layout manager
+                hideMarkdownSyntax(storage: storage, range: fullRange)
+            }
 
             // Resolve image and add paragraph spacing for inline display
             let imagePath = nsText.substring(with: match.range(at: 5))
@@ -914,23 +969,27 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             storage.addAttribute(.foregroundColor, value: NSColor(Theme.Colors.mdLink), range: numRange)
         }
 
-        // Task lists: - [ ] or - [x] — visual checkboxes drawn by CheckboxLayoutManager
-        applyLinePattern(storage: storage, nsText: nsText, pattern: "^(\\s*)([-*+]\\s\\[)([ xX])(\\]\\s)(.*)$") { match in
-            let prefixRange = match.range(at: 2)   // bullet through open bracket
-            let checkChar = match.range(at: 3)
-            let suffixRange = match.range(at: 4)   // close bracket + space
-            let contentRange = match.range(at: 5)
+        // Task lists: - [ ] or - [x] — bullet + brackets hidden, visual box drawn by layout manager
+        applyLinePattern(storage: storage, nsText: nsText, pattern: "^(\\s*)([-*+]\\s)(\\[)([ xX])(\\])(\\s)?(.*)$") { match in
+            let bulletRange = match.range(at: 2)
+            let bracketOpen = match.range(at: 3)
+            let checkChar = match.range(at: 4)
+            let bracketClose = match.range(at: 5)
+            let spaceAfter = match.range(at: 6)
+            let contentRange = match.range(at: 7)
             let ch = nsText.substring(with: checkChar)
             let isChecked = ch == "x" || ch == "X"
-            // Collapse entire prefix to near-zero width — checkbox drawn by layout manager
-            let hiddenRange = NSRange(
-                location: prefixRange.location,
-                length: suffixRange.location + suffixRange.length - prefixRange.location
-            )
-            storage.addAttribute(.font, value: NSFont.systemFont(ofSize: 0.01), range: hiddenRange)
-            storage.addAttribute(.foregroundColor, value: NSColor.clear, range: hiddenRange)
-            // Dim and strikethrough completed items
-            if isChecked && contentRange.length > 0 {
+
+            // Collapse bullet, brackets, and gap space to zero-width
+            hideMarkdownSyntax(storage: storage, range: bulletRange)
+            hideMarkdownSyntax(storage: storage, range: bracketOpen)
+            hideMarkdownSyntax(storage: storage, range: checkChar)
+            hideMarkdownSyntax(storage: storage, range: bracketClose)
+            if spaceAfter.location != NSNotFound {
+                hideMarkdownSyntax(storage: storage, range: spaceAfter)
+            }
+
+            if isChecked && contentRange.location != NSNotFound && contentRange.length > 0 {
                 storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: contentRange)
                 storage.addAttribute(.foregroundColor, value: mutedColor, range: contentRange)
             }
@@ -1607,7 +1666,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         // MARK: - Checkbox Click Handling
 
         private static let checkboxHitRegex = try! NSRegularExpression(
-            pattern: "^(\\s*)([-*+]\\s\\[[ xX]\\])",
+            pattern: "^(\\s*[-*+]\\s)(\\[)([ xX])(\\])",
             options: .anchorsMatchLines
         )
 
@@ -1636,11 +1695,9 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             guard let match = Self.checkboxHitRegex.firstMatch(
                 in: line, range: NSRange(location: 0, length: (line as NSString).length)
             ) else { return false }
-            // Hit area covers the entire collapsed prefix (bullet + brackets)
-            let prefixRange = match.range(at: 2)
-            let hitStart = lineRange.location + prefixRange.location
-            let hitEnd = hitStart + prefixRange.length
-            return charIndex >= hitStart && charIndex < hitEnd
+            let checkStart = lineRange.location + match.range(at: 2).location
+            let checkEnd = lineRange.location + match.range(at: 4).location + match.range(at: 4).length
+            return charIndex >= checkStart && charIndex < checkEnd
         }
 
         private func toggleCheckboxAt(_ point: NSPoint, in textView: NSTextView) {
