@@ -252,6 +252,8 @@ final class AppState: ObservableObject {
     @Published var renamingNodeURL: URL? = nil
     @Published var showOutline: Bool = true
     @Published var showTerminal: Bool = false
+    @Published var showCalendar: Bool = true
+    @Published var calendarDate: Date = Date()
     @Published var recentFolders: [String] = []
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {
@@ -971,6 +973,91 @@ final class AppState: ObservableObject {
         withAnimation(.easeInOut(duration: 0.2)) {
             showTerminal.toggle()
         }
+    }
+
+    func toggleCalendar() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showCalendar.toggle()
+        }
+    }
+
+    // MARK: - Daily Notes
+
+    func openDailyNote(for date: Date) {
+        guard let rootURL else { return }
+        let cal = Calendar.current
+        let year = cal.component(.year, from: date)
+        let month = cal.component(.month, from: date)
+        let day = cal.component(.day, from: date)
+
+        let monthStr = String(format: "%04d-%02d", year, month)
+        let dayStr = String(format: "%04d-%02d-%02d", year, month, day)
+
+        let dailyDir = rootURL.appendingPathComponent("Daily")
+        let monthDir = dailyDir.appendingPathComponent(monthStr)
+        let fileURL = monthDir.appendingPathComponent("\(dayStr).md")
+
+        let fm = FileManager.default
+
+        // Create directories if needed
+        if !fm.fileExists(atPath: monthDir.path) {
+            try? fm.createDirectory(at: monthDir, withIntermediateDirectories: true)
+        }
+
+        // Create file with date heading if it doesn't exist
+        if !fm.fileExists(atPath: fileURL.path) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM d, yyyy"
+            let heading = "# \(formatter.string(from: date))\n\n"
+            fm.createFile(atPath: fileURL.path, contents: heading.data(using: .utf8))
+        }
+
+        // Expand Daily/ and month folder in sidebar
+        expandedFolderPaths.insert(relativePath(for: dailyDir) ?? "Daily")
+        expandedFolderPaths.insert(relativePath(for: monthDir) ?? "Daily/\(monthStr)")
+        persistExpandedFolders()
+
+        reloadTree(selecting: fileURL)
+    }
+
+    func dailyNoteExists(for date: Date) -> Bool {
+        guard let rootURL else { return false }
+        let cal = Calendar.current
+        let year = cal.component(.year, from: date)
+        let month = cal.component(.month, from: date)
+        let day = cal.component(.day, from: date)
+
+        let monthStr = String(format: "%04d-%02d", year, month)
+        let dayStr = String(format: "%04d-%02d-%02d", year, month, day)
+
+        let fileURL = rootURL
+            .appendingPathComponent("Daily")
+            .appendingPathComponent(monthStr)
+            .appendingPathComponent("\(dayStr).md")
+
+        return FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
+    func dailyNoteDates(for year: Int, month: Int) -> Set<Int> {
+        guard let rootURL else { return [] }
+        let monthStr = String(format: "%04d-%02d", year, month)
+        let monthDir = rootURL
+            .appendingPathComponent("Daily")
+            .appendingPathComponent(monthStr)
+
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(atPath: monthDir.path) else { return [] }
+
+        var days = Set<Int>()
+        let prefix = "\(monthStr)-"
+        for file in files where file.hasSuffix(".md") && file.hasPrefix(prefix) {
+            let name = (file as NSString).deletingPathExtension
+            let dayPart = String(name.dropFirst(prefix.count))
+            if let day = Int(dayPart) {
+                days.insert(day)
+            }
+        }
+        return days
     }
 
     func navigateToHeading(_ heading: HeadingItem) {

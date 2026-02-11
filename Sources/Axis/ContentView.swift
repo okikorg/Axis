@@ -277,14 +277,31 @@ private struct MainEditorView: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    // Right sidebar - document outline
-                    if appState.showOutline && appState.activeFileURL != nil {
+                    // Right sidebar - calendar + outline
+                    if appState.activeFileURL != nil && (appState.showOutline || appState.showCalendar) {
                         Rectangle()
                             .fill(Theme.Colors.divider)
                             .frame(width: 1)
 
-                        OutlineView()
-                            .frame(width: outlineWidth(for: geo.size.width))
+                        VStack(spacing: 0) {
+                            if appState.showCalendar {
+                                CalendarView()
+
+                                if appState.showOutline {
+                                    Rectangle()
+                                        .fill(Theme.Colors.divider)
+                                        .frame(height: 1)
+                                        .padding(.horizontal, Theme.Spacing.l)
+                                }
+                            }
+
+                            if appState.showOutline {
+                                OutlineView()
+                            } else {
+                                Spacer()
+                            }
+                        }
+                        .frame(width: outlineWidth(for: geo.size.width))
                     }
                 }
                 .frame(maxHeight: .infinity)

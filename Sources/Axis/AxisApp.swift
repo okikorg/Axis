@@ -244,6 +244,11 @@ struct AxisApp: App {
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
+                Button("Toggle Calendar") {
+                    appState.toggleCalendar()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+
                 Button("Toggle Terminal") {
                     appState.toggleTerminal()
                 }
