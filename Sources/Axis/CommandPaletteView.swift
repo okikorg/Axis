@@ -325,6 +325,7 @@ struct CommandPaletteView: View {
                             resultCount: results.count,
                             placeholder: placeholder,
                             onSubmit: executeSelected,
+                            onEscape: dismiss,
                             onQueryChanged: { newQuery in
                                 selectedIndex = 0
                                 updateResults(for: newQuery)
@@ -532,26 +533,6 @@ struct CommandPaletteView: View {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // Escape
                 DispatchQueue.main.async { dismiss() }
-                return nil
-            }
-            if event.keyCode == 126 { // Up arrow
-                DispatchQueue.main.async {
-                    if results.count > 0 {
-                        selectedIndex = (selectedIndex - 1 + results.count) % results.count
-                    }
-                }
-                return nil
-            }
-            if event.keyCode == 125 { // Down arrow
-                DispatchQueue.main.async {
-                    if results.count > 0 {
-                        selectedIndex = (selectedIndex + 1) % results.count
-                    }
-                }
-                return nil
-            }
-            if event.keyCode == 36 { // Return
-                DispatchQueue.main.async { executeSelected() }
                 return nil
             }
             return event
@@ -953,10 +934,11 @@ struct PaletteSearchField: NSViewRepresentable {
     let resultCount: Int
     let placeholder: String
     let onSubmit: () -> Void
+    let onEscape: () -> Void
     let onQueryChanged: (String) -> Void
 
     func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField()
+        let field = PaletteTextField()
         field.placeholderString = placeholder
         field.isBordered = false
         field.backgroundColor = .clear
@@ -989,12 +971,41 @@ struct PaletteSearchField: NSViewRepresentable {
         context.coordinator.resultCount = resultCount
         context.coordinator.selectedIndex = $selectedIndex
         context.coordinator.onSubmit = onSubmit
+        context.coordinator.onEscape = onEscape
         context.coordinator.onQueryChanged = onQueryChanged
+        if let paletteField = nsView as? PaletteTextField {
+            paletteField.onMoveUp = context.coordinator.handleMoveUp
+            paletteField.onMoveDown = context.coordinator.handleMoveDown
+            paletteField.onSubmit = context.coordinator.handleSubmit
+            paletteField.onEscape = context.coordinator.handleEscape
+        }
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(query: $query, selectedIndex: $selectedIndex, resultCount: resultCount,
-                    onSubmit: onSubmit, onQueryChanged: onQueryChanged)
+                    onSubmit: onSubmit, onEscape: onEscape, onQueryChanged: onQueryChanged)
+    }
+
+    private final class PaletteTextField: NSTextField {
+        var onMoveUp: (() -> Void)?
+        var onMoveDown: (() -> Void)?
+        var onSubmit: (() -> Void)?
+        var onEscape: (() -> Void)?
+
+        override func keyDown(with event: NSEvent) {
+            switch event.keyCode {
+            case 126: // Up arrow
+                onMoveUp?()
+            case 125: // Down arrow
+                onMoveDown?()
+            case 36: // Return
+                onSubmit?()
+            case 53: // Escape
+                onEscape?()
+            default:
+                super.keyDown(with: event)
+            }
+        }
     }
 
     class Coordinator: NSObject, NSTextFieldDelegate {
@@ -1002,14 +1013,17 @@ struct PaletteSearchField: NSViewRepresentable {
         var selectedIndex: Binding<Int>
         var resultCount: Int
         var onSubmit: () -> Void
+        var onEscape: () -> Void
         var onQueryChanged: (String) -> Void
 
         init(query: Binding<String>, selectedIndex: Binding<Int>, resultCount: Int,
-             onSubmit: @escaping () -> Void, onQueryChanged: @escaping (String) -> Void) {
+             onSubmit: @escaping () -> Void, onEscape: @escaping () -> Void,
+             onQueryChanged: @escaping (String) -> Void) {
             self.query = query
             self.selectedIndex = selectedIndex
             self.resultCount = resultCount
             self.onSubmit = onSubmit
+            self.onEscape = onEscape
             self.onQueryChanged = onQueryChanged
         }
 
@@ -1025,27 +1039,40 @@ struct PaletteSearchField: NSViewRepresentable {
             onQueryChanged(newText)
         }
 
-        // Arrow keys, Return handled here. Do NOT override editor.delegate
-        // (that breaks this delegate chain). Escape handled by global key monitor.
+        func handleMoveUp() {
+            guard resultCount > 0 else { return }
+            selectedIndex.wrappedValue = (selectedIndex.wrappedValue - 1 + resultCount) % resultCount
+        }
+
+        func handleMoveDown() {
+            guard resultCount > 0 else { return }
+            selectedIndex.wrappedValue = (selectedIndex.wrappedValue + 1) % resultCount
+        }
+
+        func handleSubmit() {
+            onSubmit()
+        }
+
+        func handleEscape() {
+            onEscape()
+        }
+
+        // Keep command selector handling as a fallback path for some input methods.
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.moveUp(_:)) {
-                if resultCount > 0 {
-                    selectedIndex.wrappedValue = (selectedIndex.wrappedValue - 1 + resultCount) % resultCount
-                }
+                handleMoveUp()
                 return true
             }
             if commandSelector == #selector(NSResponder.moveDown(_:)) {
-                if resultCount > 0 {
-                    selectedIndex.wrappedValue = (selectedIndex.wrappedValue + 1) % resultCount
-                }
+                handleMoveDown()
                 return true
             }
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                onSubmit()
+                handleSubmit()
                 return true
             }
             if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-                // Also handle Escape here as fallback
+                handleEscape()
                 return true
             }
             return false

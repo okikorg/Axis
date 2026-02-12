@@ -1,5 +1,22 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
+
+// MARK: - Window Configurator
+
+/// Finds the hosting NSWindow and applies titlebar configuration.
+private struct WindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
@@ -14,6 +31,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 600, minHeight: 400)
+        .background(WindowConfigurator())
         .background(Theme.Colors.background)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -237,6 +255,18 @@ private struct WelcomeView: View {
 private struct MainEditorView: View {
     @EnvironmentObject private var appState: AppState
 
+    private var themeIcon: String {
+        switch appState.appearanceMode {
+        case .light: return "sun.max"
+        case .dark: return "moon"
+        case .system: return "circle.lefthalf.filled"
+        }
+    }
+
+    private var rightSidebarVisible: Bool {
+        appState.showOutline || appState.showCalendar
+    }
+
     var body: some View {
         GeometryReader { geo in
             VStack(spacing: 0) {
@@ -259,7 +289,6 @@ private struct MainEditorView: View {
                         // Tab Bar
                         if !appState.openFiles.isEmpty {
                             TabBarView()
-                                .padding(.top, 4)
                         }
 
                         // Breadcrumb - minimal
@@ -314,8 +343,41 @@ private struct MainEditorView: View {
             }
         }
         .background(Theme.Colors.background)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        appState.isDistractionFree.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                }
+            }
+
+            ToolbarItem(placement: .principal) {
+                Spacer()
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        let newState = !rightSidebarVisible
+                        appState.showOutline = newState
+                        appState.showCalendar = newState
+                    }
+                } label: {
+                    Image(systemName: "sidebar.right")
+                }
+
+                Button {
+                    appState.cycleAppearance()
+                } label: {
+                    Image(systemName: themeIcon)
+                }
+            }
+        }
     }
-    
+
     private func sidebarWidth(for windowWidth: CGFloat) -> CGFloat {
         // Responsive sidebar: narrower on small windows, wider on large
         let percentage: CGFloat = windowWidth < 800 ? 0.28 : 0.22

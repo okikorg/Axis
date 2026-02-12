@@ -2,6 +2,19 @@
 
 Minimal, native macOS markdown editor built with SwiftUI + AppKit. Folder-based workspace, inline markdown rendering, and distraction-free writing.
 
+<table>
+  <tr>
+    <td><img src="screenshots/welcome-light.png" alt="Welcome - light" /></td>
+    <td><img src="screenshots/editor-light.png" alt="Editor - light" /></td>
+    <td><img src="screenshots/calendar-light.png" alt="Calendar - light" /></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/welcome-dark.png" alt="Welcome - dark" /></td>
+    <td><img src="screenshots/editor-dark.png" alt="Editor - dark" /></td>
+    <td><img src="screenshots/calendar-dark.png" alt="Calendar - dark" /></td>
+  </tr>
+</table>
+
 ## Features
 
 - **Multi-tab editing** with dirty indicators and autosave

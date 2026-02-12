@@ -32,7 +32,7 @@ struct AxisApp: App {
             ContentView()
                 .environmentObject(appState)
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             // Replace default Close command to close tab instead of window
             CommandGroup(replacing: .saveItem) {

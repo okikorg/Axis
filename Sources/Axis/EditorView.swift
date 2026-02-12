@@ -743,6 +743,19 @@ private struct HighlightingTextEditor: NSViewRepresentable {
         return NSIntersectionRange(matchLineRange, cursorLineRange).length > 0
     }
 
+    private func derivedFont(from storage: NSTextStorage, at location: Int, baseSize: CGFloat, addBold: Bool, addItalic: Bool) -> NSFont {
+        let existingFont = storage.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+        let size = existingFont?.pointSize ?? baseSize
+        let name = existingFont?.fontName.lowercased() ?? ""
+        let isBold = addBold || name.contains("bold")
+        let isItalic = addItalic || name.contains("italic")
+
+        if isBold && isItalic { return RobotoMono.boldItalic(size: size) }
+        if isBold { return RobotoMono.bold(size: size) }
+        if isItalic { return RobotoMono.italic(size: size) }
+        return RobotoMono.regular(size: size)
+    }
+
     private func applyMarkdownStyles(storage: NSTextStorage, text: String, baseSize: CGFloat, textColor: NSColor, mutedColor: NSColor, secondaryColor: NSColor, cursorLineRange: NSRange) {
         let nsText = text as NSString
 
@@ -819,7 +832,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange1 = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
-            let font = RobotoMono.boldItalic(size: baseSize)
+            let font = derivedFont(from: storage, at: contentRange.location, baseSize: baseSize, addBold: true, addItalic: true)
             storage.addAttribute(.font, value: font, range: contentRange)
             let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
             if onCursor {
@@ -836,7 +849,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange1 = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
-            let boldFont = RobotoMono.bold(size: baseSize)
+            let boldFont = derivedFont(from: storage, at: contentRange.location, baseSize: baseSize, addBold: true, addItalic: false)
             storage.addAttribute(.font, value: boldFont, range: contentRange)
             let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
             if onCursor {
@@ -853,7 +866,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             let markerRange1 = match.range(at: 1)
             let contentRange = match.range(at: 2)
             let markerRange2 = NSRange(location: contentRange.location + contentRange.length, length: markerRange1.length)
-            let italicFont = RobotoMono.italic(size: baseSize)
+            let italicFont = derivedFont(from: storage, at: contentRange.location, baseSize: baseSize, addBold: false, addItalic: true)
             storage.addAttribute(.font, value: italicFont, range: contentRange)
             let onCursor = isOnCursorLine(nsText: nsText, matchRange: match.range(at: 0), cursorLineRange: cursorLineRange)
             if onCursor {
