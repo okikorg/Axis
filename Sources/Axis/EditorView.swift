@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import os
 
 // MARK: - Inline Image Custom Attribute
 
@@ -453,7 +454,7 @@ private class ImageAwareTextView: NSTextView {
 
         let hasActiveURL = coordinator?.parent.appState.activeFileURL != nil
         let canReadImage = pb.canReadObject(forClasses: [NSImage.self], options: nil)
-        print("[Paste] activeURL=\(hasActiveURL), canReadImage=\(canReadImage), types=\(pb.types ?? [])")
+        Logger.editor.debug("[Paste] activeURL=\(hasActiveURL), canReadImage=\(canReadImage), types=\(pb.types ?? [], privacy: .public)")
 
         if let activeURL = coordinator?.parent.appState.activeFileURL,
            canReadImage {
@@ -469,7 +470,7 @@ private class ImageAwareTextView: NSTextView {
                 stringIsTextContent = !trimmed.isEmpty
                     && !trimmed.hasPrefix("http://")
                     && !trimmed.hasPrefix("https://")
-                print("[Paste] string on pb: '\(trimmed.prefix(100))', isTextContent=\(stringIsTextContent)")
+                Logger.editor.debug("[Paste] string on pb: '\(trimmed.prefix(100), privacy: .public)', isTextContent=\(stringIsTextContent)")
             } else {
                 stringIsTextContent = false
             }
@@ -480,7 +481,7 @@ private class ImageAwareTextView: NSTextView {
                 let relativePath = pngData.flatMap {
                     HighlightingTextEditor.Coordinator.saveImageData($0, near: activeURL)
                 }
-                print("[Paste] image=\(image != nil), pngData=\(pngData != nil), path=\(relativePath ?? "nil")")
+                Logger.editor.debug("[Paste] image=\(image != nil), pngData=\(pngData != nil), path=\(relativePath ?? "nil", privacy: .public)")
 
                 if let relativePath = relativePath {
                     let markdown = "![image](\(relativePath))"

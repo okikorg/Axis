@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import os
 
 // MARK: - Open File Tab
 
@@ -255,6 +256,7 @@ final class AppState: ObservableObject {
     @Published var showCalendar: Bool = true
     @Published var calendarDate: Date = Date()
     @Published var recentFolders: [String] = []
+    @Published var errorMessage: String?
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {
             UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
@@ -332,6 +334,17 @@ final class AppState: ObservableObject {
             return rootURL.lastPathComponent
         }
         return rootURL.lastPathComponent + relativePath
+    }
+
+    // MARK: - Error Feedback
+
+    func showError(_ message: String) {
+        errorMessage = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            if self?.errorMessage == message {
+                self?.errorMessage = nil
+            }
+        }
     }
 
     // MARK: - Appearance
@@ -566,7 +579,8 @@ final class AppState: ObservableObject {
             openFiles[index].isDirty = false
             openFiles[index].lastSavedAt = Date()
         } catch {
-            print("Failed to save file: \(error)")
+            Logger.fileOps.error("Failed to save file: \(error.localizedDescription)")
+            showError("Failed to save file")
         }
     }
     
@@ -610,7 +624,8 @@ final class AppState: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
         } catch {
-            print("Failed to create folder: \(error)")
+            Logger.fileOps.error("Failed to create folder: \(error.localizedDescription)")
+            showError("Failed to create folder")
         }
         reloadTree(selecting: url)
     }
@@ -647,7 +662,8 @@ final class AppState: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
         } catch {
-            print("Failed to create folder: \(error)")
+            Logger.fileOps.error("Failed to create folder: \(error.localizedDescription)")
+            showError("Failed to create folder")
         }
         reloadTree(selecting: url)
     }
@@ -663,7 +679,8 @@ final class AppState: ObservableObject {
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            print("Failed to delete: \(error)")
+            Logger.fileOps.error("Failed to delete: \(error.localizedDescription)")
+            showError("Failed to delete item")
         }
         reloadTree(selecting: rootURL)
     }
@@ -757,7 +774,8 @@ final class AppState: ObservableObject {
 
             reloadTree(selecting: destinationURL)
         } catch {
-            print("Failed to rename: \(error)")
+            Logger.fileOps.error("Failed to rename: \(error.localizedDescription)")
+            showError("Failed to rename item")
         }
     }
     
@@ -857,7 +875,8 @@ final class AppState: ObservableObject {
             
             reloadTree(selecting: destinationURL)
         } catch {
-            print("Failed to move: \(error)")
+            Logger.fileOps.error("Failed to move: \(error.localizedDescription)")
+            showError("Failed to move item")
         }
     }
     
@@ -1447,7 +1466,8 @@ final class AppState: ObservableObject {
             do {
                 try FileManager.default.copyItem(at: imageURL, to: destURL)
             } catch {
-                print("Failed to copy image: \(error)")
+                Logger.fileOps.error("Failed to copy image: \(error.localizedDescription)")
+                showError("Failed to copy image")
                 return
             }
             relativePath = "images/\(destURL.lastPathComponent)"
@@ -1537,7 +1557,7 @@ final class AppState: ObservableObject {
             let decoded = try JSONDecoder().decode([String: FolderCustomization].self, from: data)
             folderCustomizations = decoded
         } catch {
-            print("Failed to decode folder customizations: \(error)")
+            Logger.app.error("Failed to decode folder customizations: \(error.localizedDescription)")
             folderCustomizations = [:]
         }
     }
@@ -1550,7 +1570,7 @@ final class AppState: ObservableObject {
             UserDefaults.standard.set(data, forKey: key)
             UserDefaults.standard.synchronize()
         } catch {
-            print("Failed to encode folder customizations: \(error)")
+            Logger.app.error("Failed to encode folder customizations: \(error.localizedDescription)")
         }
     }
     
@@ -1574,7 +1594,7 @@ final class AppState: ObservableObject {
             let decoded = try JSONDecoder().decode(MarkdownDefaults.self, from: data)
             markdownDefaults = decoded
         } catch {
-            print("Failed to decode markdown defaults: \(error)")
+            Logger.app.error("Failed to decode markdown defaults: \(error.localizedDescription)")
             markdownDefaults = MarkdownDefaults()
         }
     }
@@ -1585,7 +1605,7 @@ final class AppState: ObservableObject {
             UserDefaults.standard.set(data, forKey: "markdownDefaults")
             UserDefaults.standard.synchronize()
         } catch {
-            print("Failed to encode markdown defaults: \(error)")
+            Logger.app.error("Failed to encode markdown defaults: \(error.localizedDescription)")
         }
     }
     

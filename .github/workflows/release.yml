@@ -13,54 +13,51 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build release binary
-        run: swift build -c release
+        with:
+          fetch-depth: 0
 
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
-      - name: Create .app bundle
+      - name: Build app bundle
+        env:
+          AXIS_VERSION: ${{ steps.version.outputs.VERSION }}
+        run: scripts/build_app.sh
+
+      - name: Code sign with Developer ID (if available)
+        if: ${{ secrets.CODESIGN_IDENTITY != '' }}
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
         run: |
-          APP="Axis.app"
-          mkdir -p "$APP/Contents/MacOS"
-          mkdir -p "$APP/Contents/Resources"
-          cp .build/release/Axis "$APP/Contents/MacOS/Axis"
-          cat > "$APP/Contents/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleName</key>
-              <string>Axis</string>
-              <key>CFBundleDisplayName</key>
-              <string>Axis</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.okik.axis</string>
-              <key>CFBundleVersion</key>
-              <string>${{ steps.version.outputs.VERSION }}</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${{ steps.version.outputs.VERSION }}</string>
-              <key>CFBundleExecutable</key>
-              <string>Axis</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>13.0</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          PLIST
+          codesign --force --deep --sign "$CODESIGN_IDENTITY" \
+            --entitlements Resources/Axis.entitlements \
+            --options runtime \
+            dist/Axis.app
+
+      - name: Notarize (if credentials available)
+        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent dist/Axis.app dist/Axis-notarize.zip
+          xcrun notarytool submit dist/Axis-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple dist/Axis.app
+          rm -f dist/Axis-notarize.zip
 
       - name: Create zip
-        run: ditto -c -k --keepParent Axis.app Axis-${{ steps.version.outputs.VERSION }}.zip
+        run: ditto -c -k --keepParent dist/Axis.app Axis-${{ steps.version.outputs.VERSION }}.zip
 
-      - name: Create dmg
+      - name: Create release dmg
         run: |
           mkdir -p dmg-staging
-          cp -R Axis.app dmg-staging/
+          cp -R dist/Axis.app dmg-staging/
           ln -s /Applications dmg-staging/Applications
           hdiutil create -volname "Axis" -srcfolder dmg-staging -ov -format UDZO Axis-${{ steps.version.outputs.VERSION }}.dmg
 

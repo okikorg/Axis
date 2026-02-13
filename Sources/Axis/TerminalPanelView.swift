@@ -10,6 +10,10 @@ final class TerminalSession {
     private(set) var terminalView: LocalProcessTerminalView?
     private(set) var isStarted = false
 
+    deinit {
+        terminalView = nil
+    }
+
     func getOrCreateView(workingDirectory: String) -> LocalProcessTerminalView {
         if let existing = terminalView {
             return existing
@@ -121,6 +125,7 @@ private struct TerminalHeader: View {
             .buttonStyle(.plain)
             .onHover { isCloseHovering = $0 }
             .help("Close terminal")
+            .accessibilityLabel("Close terminal")
         }
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.vertical, Theme.Spacing.s)

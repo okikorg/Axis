@@ -16,6 +16,16 @@ done
 
 cd "$ROOT_DIR"
 
+# --- Determine version ---
+if [[ -n "${AXIS_VERSION:-}" ]]; then
+  VERSION="$AXIS_VERSION"
+elif git describe --tags --abbrev=0 &>/dev/null; then
+  VERSION="$(git describe --tags --abbrev=0 | sed 's/^v//')"
+else
+  VERSION="dev"
+fi
+echo "Version: $VERSION"
+
 # --- Clean ---
 echo "Cleaning build cache..."
 swift package clean
@@ -27,7 +37,7 @@ swift build -c release
 
 BIN_DIR="$(swift build -c release --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
-BUNDLE_PATH="$BIN_DIR/Axis_Axis.bundle"
+BUNDLE_PATH="$BIN_DIR/Axis_AxisCore.bundle"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 
 if [[ ! -f "$BIN_PATH" ]]; then
@@ -47,6 +57,10 @@ chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
 # Info.plist
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 
+# Stamp version into plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_DIR/Contents/Info.plist"
+
 # App icon
 if [[ -f "$ROOT_DIR/Resources/AppIcon.icns" ]]; then
   cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
@@ -57,8 +71,8 @@ fi
 
 # Font bundle (SPM resource bundle)
 if [[ -d "$BUNDLE_PATH" ]]; then
-  cp -R "$BUNDLE_PATH" "$APP_DIR/Contents/Resources/Axis_Axis.bundle"
-  echo "  Copied Axis_Axis.bundle (fonts)"
+  cp -R "$BUNDLE_PATH" "$APP_DIR/Contents/Resources/Axis_AxisCore.bundle"
+  echo "  Copied Axis_AxisCore.bundle (fonts)"
 else
   echo "  Warning: Font bundle not found at $BUNDLE_PATH"
 fi

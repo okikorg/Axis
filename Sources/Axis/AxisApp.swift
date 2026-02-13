@@ -2,15 +2,14 @@ import SwiftUI
 import AppKit
 import CoreText
 
-@main
-struct AxisApp: App {
+public struct AxisApp: App {
     @StateObject private var appState = AppState()
 
-    init() {
+    public init() {
         Self.registerBundledFonts()
     }
 
-    private static func registerBundledFonts() {
+    public static func registerBundledFonts() {
         let fontNames = [
             "RobotoMono-Regular",
             "RobotoMono-Medium",
@@ -27,7 +26,7 @@ struct AxisApp: App {
         }
     }
 
-    var body: some Scene {
+    public var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)

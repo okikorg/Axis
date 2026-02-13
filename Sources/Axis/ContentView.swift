@@ -352,6 +352,7 @@ private struct MainEditorView: View {
                 } label: {
                     Image(systemName: "sidebar.left")
                 }
+                .accessibilityLabel("Toggle sidebar")
             }
 
             ToolbarItem(placement: .principal) {
@@ -368,12 +369,14 @@ private struct MainEditorView: View {
                 } label: {
                     Image(systemName: "sidebar.right")
                 }
+                .accessibilityLabel("Toggle right sidebar")
 
                 Button {
                     appState.cycleAppearance()
                 } label: {
                     Image(systemName: themeIcon)
                 }
+                .accessibilityLabel("Switch theme")
             }
         }
     }
@@ -657,38 +660,46 @@ private struct StatusBarView: View {
     
     var body: some View {
         HStack(spacing: Theme.Spacing.l) {
-            // Left side - cursor position
-            Text("Ln \(appState.cursorLine), Col \(appState.cursorColumn)")
-                .font(Theme.Fonts.statusBar)
-                .foregroundStyle(Theme.Colors.textMuted)
-            
-            Text("·")
-                .foregroundStyle(Theme.Colors.textDisabled)
-            
-            // Stats
-            Text("\(appState.wordCount()) words")
-                .font(Theme.Fonts.statusBar)
-                .foregroundStyle(Theme.Colors.textMuted)
-            
-            Text("·")
-                .foregroundStyle(Theme.Colors.textDisabled)
-            
-            Text(readingTime)
-                .font(Theme.Fonts.statusBar)
-                .foregroundStyle(Theme.Colors.textMuted)
-            
+            // Error message (takes priority over left side stats)
+            if let error = appState.errorMessage {
+                Text(error)
+                    .font(Theme.Fonts.statusBar)
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+            } else {
+                // Left side - cursor position
+                Text("Ln \(appState.cursorLine), Col \(appState.cursorColumn)")
+                    .font(Theme.Fonts.statusBar)
+                    .foregroundStyle(Theme.Colors.textMuted)
+
+                Text("·")
+                    .foregroundStyle(Theme.Colors.textDisabled)
+
+                // Stats
+                Text("\(appState.wordCount()) words")
+                    .font(Theme.Fonts.statusBar)
+                    .foregroundStyle(Theme.Colors.textMuted)
+
+                Text("·")
+                    .foregroundStyle(Theme.Colors.textDisabled)
+
+                Text(readingTime)
+                    .font(Theme.Fonts.statusBar)
+                    .foregroundStyle(Theme.Colors.textMuted)
+            }
+
             Spacer()
-            
+
             // Right side - zoom and status
             if appState.zoomLevel != 1.0 {
                 Text("\(appState.zoomPercentage)%")
                     .font(Theme.Fonts.statusBar)
                     .foregroundStyle(Theme.Colors.textMuted)
-                
+
                 Text("·")
                     .foregroundStyle(Theme.Colors.textDisabled)
             }
-            
+
             Text(appState.isDirty ? "Edited" : "Saved")
                 .font(Theme.Fonts.statusBar)
                 .foregroundStyle(appState.isDirty ? Theme.Colors.textSecondary : Theme.Colors.textMuted)
@@ -696,5 +707,6 @@ private struct StatusBarView: View {
         .padding(.horizontal, Theme.Spacing.xl)
         .frame(height: 24)
         .background(Theme.Colors.statusBar)
+        .accessibilityElement(children: .combine)
     }
 }

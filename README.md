@@ -50,6 +50,11 @@ scripts/build_app.sh
 
 The app bundle will be at `dist/Axis.app`.
 
+> **Unsigned builds:** If the app is not code-signed with a Developer ID, macOS Gatekeeper will block it. Remove the quarantine flag to run:
+> ```bash
+> xattr -cr dist/Axis.app
+> ```
+
 ## Keyboard Shortcuts
 
 ### File Operations
@@ -111,6 +116,16 @@ The app bundle will be at `dist/Axis.app`.
 - **Spacing**: 8px grid system
 - **Philosophy**: Minimal UI, no distractions, smooth animations
 
+## Security Notes
+
+Axis requests three entitlements:
+
+- **App Sandbox disabled** — the built-in terminal needs to spawn shell processes and access arbitrary workspace directories, which is incompatible with the macOS sandbox.
+- **Allow unsigned executable memory** — required for JIT-style operations.
+- **Disable library validation** — allows loading the SwiftTerm dynamic library.
+
+See `Resources/Axis.entitlements` for details.
+
 ## Notes
 
 - The file tree shows `.md` files, image files, and folders. Hidden files are excluded.
@@ -118,3 +133,11 @@ The app bundle will be at `dist/Axis.app`.
 - Autosave triggers after a 2-second debounce on text changes.
 - Folder customizations (icons, colors) are persisted per project.
 - Terminal opens in the current file's directory.
+
+## Font Attribution
+
+Axis bundles [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono) by Christian Robertson, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+## License
+
+[MIT](LICENSE)

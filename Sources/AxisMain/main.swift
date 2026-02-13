@@ -1,0 +1,3 @@
+import AxisCore
+
+AxisApp.main()
