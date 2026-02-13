@@ -46,36 +46,45 @@ func renderIcon(size: Int) -> NSImage {
     // Background rounded rect
     let rect = NSRect(x: 0, y: 0, width: s, height: s)
     let cornerRadius = s * cornerRadiusFraction
-    let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+    let bgPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
     bgColor.setFill()
-    path.fill()
+    bgPath.fill()
 
-    // Draw "A" - use Roboto Mono if available, otherwise SF Mono or system monospaced
-    let fontSize = s * 0.58
-    let font: NSFont = {
-        if let roboto = NSFont(name: "RobotoMono-Bold", size: fontSize) {
-            return roboto
-        }
-        if let sfMono = NSFont(name: "SFMono-Bold", size: fontSize) {
-            return sfMono
-        }
-        return NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold)
-    }()
+    // --- Geometry (from Resources/icon.svg, converted to CG coords) ---
+    let pad = s * 0.1625
 
-    let attrs: [NSAttributedString.Key: Any] = [
-        .font: font,
-        .foregroundColor: fgColor,
-    ]
+    // X line endpoints
+    let topLeft     = CGPoint(x: pad,     y: s - pad)
+    let topRight    = CGPoint(x: s - pad, y: s - pad)
+    let bottomLeft  = CGPoint(x: pad,     y: pad)
+    let bottomRight = CGPoint(x: s - pad, y: pad)
 
-    let str = "A" as NSString
-    let strSize = str.size(withAttributes: attrs)
+    // Triangle vertices — apex at center, base below
+    let triApex      = CGPoint(x: s * 0.5,   y: s * 0.5)
+    let triBaseLeft  = CGPoint(x: s * 0.246,  y: s * 0.277)
+    let triBaseRight = CGPoint(x: s * 0.754,  y: s * 0.277)
 
-    // Center the glyph precisely - nudge up slightly for optical centering
-    let x = (s - strSize.width) / 2
-    let y = (s - strSize.height) / 2 + s * 0.02
-    let drawPoint = NSPoint(x: x, y: y)
+    // --- 1. Triangle (behind X) ---
+    fgColor.setFill()
+    let tri = NSBezierPath()
+    tri.move(to: triApex)
+    tri.line(to: triBaseLeft)
+    tri.line(to: triBaseRight)
+    tri.close()
+    tri.fill()
 
-    str.draw(at: drawPoint, withAttributes: attrs)
+    // --- 2. X lines (on top) ---
+    let lineWidth = max(s * 0.0586, 1.0)
+    fgColor.setStroke()
+
+    let xPath = NSBezierPath()
+    xPath.lineWidth = lineWidth
+    xPath.lineCapStyle = .round
+
+    xPath.move(to: topLeft);  xPath.line(to: bottomRight)   // top-left → bottom-right
+    xPath.move(to: topRight); xPath.line(to: bottomLeft)    // top-right → bottom-left
+
+    xPath.stroke()
 
     image.unlockFocus()
     return image
