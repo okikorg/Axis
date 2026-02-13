@@ -118,7 +118,7 @@ private struct OutlineList: View {
                 .padding(.vertical, Theme.Spacing.m)
                 .padding(.horizontal, Theme.Spacing.s)
             }
-            .onChange(of: activeID) { newID in
+            .onChangeCompat(of: activeID) { newID in
                 if let id = newID {
                     withAnimation(.easeOut(duration: 0.15)) {
                         proxy.scrollTo(id, anchor: .center)

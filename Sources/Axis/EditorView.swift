@@ -174,7 +174,8 @@ private struct EmptyEditorView: View {
         ("⌘ S", "Save"),
         ("⌘ W", "Close tab"),
         ("⌘ /", "Toggle sidebar"),
-        ("⌘ ⇧ F", "Distraction-free"),
+        ("⌘ ⇧ F", "Search all files"),
+        ("⌘ /", "Toggle sidebar"),
         ("⌘ +/−/0", "Zoom in/out/reset"),
     ]
     
@@ -1606,7 +1607,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
                     counters = counters.filter { $0.key <= indentLen }
 
                     counters[indentLen, default: 0] += 1
-                    let correctNum = counters[indentLen]!
+                    let correctNum = counters[indentLen, default: 0]
 
                     if currentNum != correctNum {
                         let absRange = NSRange(location: offset + numRange.location, length: numRange.length)
@@ -1733,6 +1734,10 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             options: .anchorsMatchLines
         )
 
+        private static let checkboxToggleRegex = try! NSRegularExpression(
+            pattern: "^(\\s*[-*+]\\s\\[)([ xX])(\\])"
+        )
+
         func gestureRecognizerShouldBegin(_ gestureRecognizer: NSGestureRecognizer) -> Bool {
             guard let textView = gestureRecognizer.view as? NSTextView else { return false }
             let point = gestureRecognizer.location(in: textView)
@@ -1785,8 +1790,7 @@ private struct HighlightingTextEditor: NSViewRepresentable {
             guard charIndex < nsText.length else { return }
             let lineRange = nsText.lineRange(for: NSRange(location: charIndex, length: 0))
             let line = nsText.substring(with: lineRange)
-            let pattern = try! NSRegularExpression(pattern: "^(\\s*[-*+]\\s\\[)([ xX])(\\])")
-            guard let match = pattern.firstMatch(
+            guard let match = Self.checkboxToggleRegex.firstMatch(
                 in: line, range: NSRange(location: 0, length: (line as NSString).length)
             ) else { return }
             let checkLocal = match.range(at: 2)

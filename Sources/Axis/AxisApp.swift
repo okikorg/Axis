@@ -33,8 +33,8 @@ public struct AxisApp: App {
         }
         .windowToolbarStyle(.unifiedCompact)
         .commands {
-            // Replace default Close command to close tab instead of window
-            CommandGroup(replacing: .saveItem) {
+            // Close Tab (before Save in File menu)
+            CommandGroup(before: .saveItem) {
                 Button("Close Tab") {
                     if let url = appState.activeFileURL {
                         appState.closeFile(at: url)
@@ -42,28 +42,24 @@ public struct AxisApp: App {
                 }
                 .keyboardShortcut("w", modifiers: [.command])
                 .disabled(appState.activeFileURL == nil)
-                
+
                 Divider()
-                
+            }
+
+            // Save command (replaces default Save/Save As)
+            CommandGroup(replacing: .saveItem) {
                 Button("Save") {
                     appState.saveActiveFile()
                 }
                 .keyboardShortcut("s", modifiers: [.command])
                 .disabled(appState.activeFileURL == nil)
             }
-            
+
             CommandGroup(after: .newItem) {
                 Button("Open Folder") {
                     appState.pickRootFolder()
                 }
                 .keyboardShortcut("o", modifiers: [.command])
-            }
-
-            CommandGroup(after: .saveItem) {
-                Button("Save") {
-                    appState.saveActiveFile()
-                }
-                .keyboardShortcut("s", modifiers: [.command])
             }
 
             CommandGroup(after: .textFormatting) {
@@ -174,20 +170,20 @@ public struct AxisApp: App {
                     appState.toggleSearch()
                 }
                 .keyboardShortcut("f", modifiers: [.command])
-                
+
                 Button("Find Next") {
                     appState.findNext()
                 }
                 .keyboardShortcut("g", modifiers: [.command])
                 .disabled(!appState.showSearch || appState.matchCount == 0)
-                
+
                 Button("Find Previous") {
                     appState.findPrevious()
                 }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
                 .disabled(!appState.showSearch || appState.matchCount == 0)
             }
-            
+
             // Sidebar toggle (uses distraction-free mode)
             CommandGroup(replacing: .sidebar) {
                 Button("Toggle Sidebar") {
@@ -197,13 +193,13 @@ public struct AxisApp: App {
                 }
                 .keyboardShortcut("/", modifiers: [.command])
             }
-            
+
             // Tab navigation & Zoom commands
             CommandGroup(after: .toolbar) {
                 Button("Command Palette") {
                     appState.toggleCommandPalette()
                 }
-                .keyboardShortcut("p", modifiers: [.command])
+                .keyboardShortcut("p", modifiers: [.command, .shift])
 
                 Divider()
 
@@ -225,12 +221,12 @@ public struct AxisApp: App {
                     appState.zoomIn()
                 }
                 .keyboardShortcut("+", modifiers: [.command])
-                
+
                 Button("Zoom Out") {
                     appState.zoomOut()
                 }
                 .keyboardShortcut("-", modifiers: [.command])
-                
+
                 Button("Reset Zoom") {
                     appState.resetZoom()
                 }
@@ -248,15 +244,10 @@ public struct AxisApp: App {
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
 
-                Button("Toggle Terminal") {
-                    appState.toggleTerminal()
-                }
-                .keyboardShortcut("j", modifiers: .command)
-
                 Button("Appearance: \(appState.appearanceMode.label)") {
                     appState.cycleAppearance()
                 }
-                .keyboardShortcut("t", modifiers: [.command])
+                .keyboardShortcut("a", modifiers: [.command, .shift])
             }
         }
     }

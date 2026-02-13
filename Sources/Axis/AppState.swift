@@ -252,10 +252,9 @@ final class AppState: ObservableObject {
     @Published var customizingFolderURL: URL? = nil
     @Published var renamingNodeURL: URL? = nil
     @Published var showOutline: Bool = true
-    @Published var showTerminal: Bool = false
     @Published var showCalendar: Bool = true
     @Published var calendarDate: Date = Date()
-    @Published var recentFolders: [String] = []
+    @Published var recentFolders: [URL] = []
     @Published var errorMessage: String?
     @Published var appearanceMode: AppearanceMode = .light {
         didSet {
@@ -269,9 +268,6 @@ final class AppState: ObservableObject {
     // replacing the full text via SwiftUI bindings, which would
     // destroy the undo stack.
     weak var editorTextView: NSTextView?
-
-    /// Holds the persistent terminal session so it survives show/hide toggles.
-    let terminalSession = TerminalSession()
 
     private var autosave = DebouncedAutosave()
     private var directoryMonitor: DirectoryMonitor?
@@ -368,14 +364,18 @@ final class AppState: ObservableObject {
     // MARK: - Root Folder Management
 
     func restoreLastRootIfPossible() {
+        BookmarkManager.migrateIfNeeded()
         restoreAppearance()
         loadMarkdownDefaults()
         loadRecentFolders()
         guard rootURL == nil else { return }
-        guard let path = UserDefaults.standard.string(forKey: "lastRootPath") else { return }
-        let url = URL(fileURLWithPath: path)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
-        setRoot(url)
+        guard let url = BookmarkManager.resolveRootBookmark() else { return }
+        guard url.startAccessingSecurityScopedResource() else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            url.stopAccessingSecurityScopedResource()
+            return
+        }
+        setRoot(url, isRestoredBookmark: true)
     }
 
     func pickRootFolder() {
@@ -391,10 +391,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    func setRoot(_ url: URL) {
+    func setRoot(_ url: URL, isRestoredBookmark: Bool = false) {
+        // Release previous security-scoped resource
+        if let previous = rootURL {
+            previous.stopAccessingSecurityScopedResource()
+        }
         rootURL = url
-        UserDefaults.standard.set(url.path, forKey: "lastRootPath")
-        addRecentFolder(url.path)
+        if !isRestoredBookmark {
+            BookmarkManager.saveRootBookmark(for: url)
+        }
+        addRecentFolder(url)
         loadExpandedFolders(for: url)
         loadFolderCustomizations(for: url)
         reloadTree(selecting: nil)
@@ -677,10 +683,10 @@ final class AppState: ObservableObject {
         closeFile(at: url)
         
         do {
-            try FileManager.default.removeItem(at: url)
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
         } catch {
-            Logger.fileOps.error("Failed to delete: \(error.localizedDescription)")
-            showError("Failed to delete item")
+            Logger.fileOps.error("Failed to move to Trash: \(error.localizedDescription)")
+            showError("Failed to move item to Trash")
         }
         reloadTree(selecting: rootURL)
     }
@@ -985,12 +991,6 @@ final class AppState: ObservableObject {
     func toggleOutline() {
         withAnimation(.easeInOut(duration: 0.2)) {
             showOutline.toggle()
-        }
-    }
-
-    func toggleTerminal() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            showTerminal.toggle()
         }
     }
 
@@ -1519,9 +1519,8 @@ final class AppState: ObservableObject {
         guard let rootURL else { return }
         let key = expandedFoldersKey(for: rootURL)
         UserDefaults.standard.set(Array(expandedFolderPaths), forKey: key)
-        UserDefaults.standard.synchronize()
     }
-    
+
     // MARK: - Folder Customization
     
     func folderCustomization(for url: URL) -> FolderCustomization {
@@ -1568,7 +1567,6 @@ final class AppState: ObservableObject {
         do {
             let data = try JSONEncoder().encode(folderCustomizations)
             UserDefaults.standard.set(data, forKey: key)
-            UserDefaults.standard.synchronize()
         } catch {
             Logger.app.error("Failed to encode folder customizations: \(error.localizedDescription)")
         }
@@ -1603,7 +1601,6 @@ final class AppState: ObservableObject {
         do {
             let data = try JSONEncoder().encode(markdownDefaults)
             UserDefaults.standard.set(data, forKey: "markdownDefaults")
-            UserDefaults.standard.synchronize()
         } catch {
             Logger.app.error("Failed to encode markdown defaults: \(error.localizedDescription)")
         }
@@ -1616,19 +1613,14 @@ final class AppState: ObservableObject {
     // MARK: - Recent Folders
     
     private func loadRecentFolders() {
-        let paths = UserDefaults.standard.stringArray(forKey: "recentFolders") ?? []
-        // Filter out paths that no longer exist
-        recentFolders = paths.filter { FileManager.default.fileExists(atPath: $0) }
+        // Resolved URLs are security-scoped but not yet started — safe for
+        // display (path, lastPathComponent) but not for file-system checks.
+        recentFolders = BookmarkManager.resolveRecentBookmarks()
     }
-    
-    private func addRecentFolder(_ path: String) {
-        var recents = UserDefaults.standard.stringArray(forKey: "recentFolders") ?? []
-        recents.removeAll { $0 == path }
-        recents.insert(path, at: 0)
-        // Keep only last 5
-        recents = Array(recents.prefix(5))
-        UserDefaults.standard.set(recents, forKey: "recentFolders")
-        recentFolders = recents.filter { FileManager.default.fileExists(atPath: $0) }
+
+    private func addRecentFolder(_ url: URL) {
+        BookmarkManager.addRecentBookmark(for: url)
+        recentFolders = BookmarkManager.resolveRecentBookmarks()
     }
 }
 

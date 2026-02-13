@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.okik.axis", category: "DirectoryMonitor")
 
 final class DirectoryMonitor {
     private let url: URL
@@ -14,7 +17,10 @@ final class DirectoryMonitor {
     func start() {
         stop()
         descriptor = open(url.path, O_EVTONLY)
-        guard descriptor >= 0 else { return }
+        guard descriptor >= 0 else {
+            logger.warning("Failed to open \(self.url.path, privacy: .public) for monitoring (errno \(errno)). Directory changes won't be detected — check sandbox / security-scoped bookmark.")
+            return
+        }
 
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor,
@@ -35,10 +41,9 @@ final class DirectoryMonitor {
             source.cancel()
             self.source = nil
         }
-        if descriptor >= 0 {
-            close(descriptor)
-            descriptor = -1
-        }
+        // The cancel handler owns closing the descriptor.
+        // Just mark it invalid to prevent deinit from re-entering.
+        descriptor = -1
     }
 
     deinit {

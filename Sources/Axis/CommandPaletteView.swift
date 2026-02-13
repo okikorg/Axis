@@ -285,7 +285,6 @@ private let allCommands: [PaletteCommand] = [
         withAnimation(.easeInOut(duration: 0.2)) { state.isDistractionFree.toggle() }
     },
     PaletteCommand(id: "outline", name: "Toggle Outline", category: .view, shortcut: "Cmd+Shift+O", icon: "list.bullet.indent") { $0.toggleOutline() },
-    PaletteCommand(id: "terminal", name: "Toggle Terminal", category: .view, shortcut: "Cmd+J", icon: "terminal") { $0.toggleTerminal() },
     PaletteCommand(id: "line-wrap", name: "Toggle Line Wrap", category: .view, shortcut: "Cmd+Shift+L", icon: "text.word.spacing") { $0.isLineWrapping.toggle() },
     PaletteCommand(id: "zoom-in", name: "Zoom In", category: .view, shortcut: "Cmd++", icon: "plus.magnifyingglass") { $0.zoomIn() },
     PaletteCommand(id: "zoom-out", name: "Zoom Out", category: .view, shortcut: "Cmd+-", icon: "minus.magnifyingglass") { $0.zoomOut() },
@@ -373,7 +372,7 @@ struct CommandPaletteView: View {
                                 .padding(.vertical, Theme.Spacing.xs)
                             }
                             .frame(maxHeight: 380)
-                            .onChange(of: selectedIndex) { newIndex in
+                            .onChangeCompat(of: selectedIndex) { newIndex in
                                 withAnimation(.easeOut(duration: 0.1)) {
                                     proxy.scrollTo(newIndex, anchor: .center)
                                 }
@@ -426,7 +425,7 @@ struct CommandPaletteView: View {
         let (mode, _) = PaletteMode.from(query: query, isFTS: appState.fullTextSearchMode)
         switch mode {
         case .commands:
-            modeBadge("CMD", icon: "terminal")
+            modeBadge("CMD", icon: "command")
         case .headings:
             modeBadge("@", icon: "number")
         case .goToLine:

@@ -145,27 +145,27 @@ struct ContentView: View {
 
 private struct WelcomeView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var hoveredRecent: String? = nil
+    @State private var hoveredRecent: URL? = nil
 
     var body: some View {
         VStack(spacing: Theme.Spacing.xxl) {
             Spacer()
-            
+
             // Minimal icon - no background
             Image(systemName: "doc.text")
                 .font(Theme.Fonts.welcomeIcon)
                 .foregroundStyle(Theme.Colors.textMuted)
-            
+
             VStack(spacing: Theme.Spacing.s) {
                 Text("Axis")
                     .font(Theme.Fonts.welcomeTitle)
                     .foregroundStyle(Theme.Colors.textSecondary)
-                
+
                 Text("A minimal markdown editor")
                     .font(Theme.Fonts.ui)
                     .foregroundStyle(Theme.Colors.textMuted)
             }
-            
+
             VStack(spacing: Theme.Spacing.m) {
                 Button {
                     appState.pickRootFolder()
@@ -178,12 +178,12 @@ private struct WelcomeView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                
+
                 Text("⌘O")
                     .font(Theme.Fonts.statusBar)
                     .foregroundStyle(Theme.Colors.textMuted)
             }
-            
+
             // Recent folders
             if !appState.recentFolders.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -191,12 +191,18 @@ private struct WelcomeView: View {
                         .font(Theme.Fonts.statusBar)
                         .foregroundStyle(Theme.Colors.textDisabled)
                         .padding(.bottom, Theme.Spacing.xs)
-                    
-                    ForEach(appState.recentFolders, id: \.self) { path in
+
+                    ForEach(appState.recentFolders, id: \.self) { url in
                         Button {
-                            let url = URL(fileURLWithPath: path)
-                            if FileManager.default.fileExists(atPath: path) {
-                                appState.setRoot(url)
+                            if url.startAccessingSecurityScopedResource() {
+                                if FileManager.default.fileExists(atPath: url.path) {
+                                    appState.setRoot(url, isRestoredBookmark: true)
+                                } else {
+                                    url.stopAccessingSecurityScopedResource()
+                                    appState.showError("Folder no longer exists")
+                                }
+                            } else {
+                                appState.showError("Unable to access folder")
                             }
                         } label: {
                             HStack(spacing: Theme.Spacing.m) {
@@ -204,43 +210,43 @@ private struct WelcomeView: View {
                                     .font(Theme.Fonts.icon)
                                     .foregroundStyle(Theme.Colors.textMuted)
                                     .frame(width: 14)
-                                
+
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(URL(fileURLWithPath: path).lastPathComponent)
+                                    Text(url.lastPathComponent)
                                         .font(Theme.Fonts.uiSmall)
-                                        .foregroundStyle(hoveredRecent == path ? Theme.Colors.text : Theme.Colors.textSecondary)
+                                        .foregroundStyle(hoveredRecent == url ? Theme.Colors.text : Theme.Colors.textSecondary)
                                         .lineLimit(1)
-                                    
-                                    Text(abbreviatePath(path))
+
+                                    Text(abbreviatePath(url.path))
                                         .font(Theme.Fonts.statusBar)
                                         .foregroundStyle(Theme.Colors.textDisabled)
                                         .lineLimit(1)
                                 }
-                                
+
                                 Spacer()
                             }
                             .padding(.horizontal, Theme.Spacing.m)
                             .padding(.vertical, Theme.Spacing.s)
                             .background(
                                 RoundedRectangle(cornerRadius: Theme.Radius.small)
-                                    .fill(hoveredRecent == path ? Theme.Colors.hover : Color.clear)
+                                    .fill(hoveredRecent == url ? Theme.Colors.hover : Color.clear)
                             )
                         }
                         .buttonStyle(.plain)
                         .onHover { isHovering in
-                            hoveredRecent = isHovering ? path : nil
+                            hoveredRecent = isHovering ? url : nil
                         }
                     }
                 }
                 .frame(width: 280)
             }
-            
+
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Colors.background)
     }
-    
+
     private func abbreviatePath(_ path: String) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         if path.hasPrefix(home) {
@@ -335,11 +341,6 @@ private struct MainEditorView: View {
                 }
                 .frame(maxHeight: .infinity)
 
-                // Terminal panel
-                if appState.showTerminal {
-                    TerminalPanelView()
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
             }
         }
         .background(Theme.Colors.background)
@@ -470,7 +471,7 @@ private struct TabItemView: View {
                     .fixedSize()
                     .onSubmit { commitRename() }
                     .onExitCommand { cancelRename() }
-                    .onChange(of: isRenameFocused) { focused in
+                    .onChangeCompat(of: isRenameFocused) { focused in
                         if !focused { commitRename() }
                     }
             } else {

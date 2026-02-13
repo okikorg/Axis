@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Build Axis.app for direct distribution (DMG/zip via GitHub Releases).
+# For App Store builds, use scripts/archive_app.sh instead.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,7 +26,15 @@ elif git describe --tags --abbrev=0 &>/dev/null; then
 else
   VERSION="dev"
 fi
-echo "Version: $VERSION"
+echo "Marketing version: $VERSION"
+
+# --- Determine build number (monotonically increasing, date-based) ---
+if [[ -n "${AXIS_BUILD_NUMBER:-}" ]]; then
+  BUILD_NUMBER="$AXIS_BUILD_NUMBER"
+else
+  BUILD_NUMBER="$(date +%Y%m%d).1"
+fi
+echo "Build number: $BUILD_NUMBER"
 
 # --- Clean ---
 echo "Cleaning build cache..."
@@ -57,9 +67,13 @@ chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
 # Info.plist
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 
-# Stamp version into plist
+# Stamp version into plist (marketing version + separate build number)
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_DIR/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_DIR/Contents/Info.plist"
+
+# Privacy manifest (required since April 2024)
+cp "$ROOT_DIR/Resources/PrivacyInfo.xcprivacy" "$APP_DIR/Contents/Resources/PrivacyInfo.xcprivacy"
+echo "  Copied PrivacyInfo.xcprivacy"
 
 # App icon
 if [[ -f "$ROOT_DIR/Resources/AppIcon.icns" ]]; then

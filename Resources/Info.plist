@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025 Okik. All rights reserved.</string>
     <key>CFBundleName</key>
     <string>Axis</string>
     <key>CFBundleDisplayName</key>
@@ -26,6 +32,8 @@
     <true/>
     <key>NSSupportsSuddenTermination</key>
     <false/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
@@ -49,7 +57,28 @@
             </array>
         </dict>
     </array>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Axis needs Apple Events access to open files.</string>
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>net.daringfireball.markdown</string>
+            <key>UTTypeDescription</key>
+            <string>Markdown Document</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>md</string>
+                    <string>markdown</string>
+                    <string>mdown</string>
+                    <string>mkd</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
 </dict>
 </plist>

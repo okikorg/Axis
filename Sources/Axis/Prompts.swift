@@ -115,11 +115,11 @@ struct DeleteConfirmView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             // Header - minimal, no icon background
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text("Delete \"\(name)\"?")
+                Text("Move \"\(name)\" to Trash?")
                     .font(Theme.Fonts.title)
                     .foregroundStyle(Theme.Colors.text)
-                
-                Text("This cannot be undone.")
+
+                Text("You can restore it from the Trash.")
                     .font(Theme.Fonts.uiSmall)
                     .foregroundStyle(Theme.Colors.textMuted)
             }
@@ -134,7 +134,7 @@ struct DeleteConfirmView: View {
                 .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
                 
-                Button("Delete") {
+                Button("Move to Trash") {
                     onConfirm()
                 }
                 .buttonStyle(DestructiveButtonStyle())
