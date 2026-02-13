@@ -43,26 +43,35 @@ func renderIcon(size: Int) -> NSImage {
         fatalError("No graphics context")
     }
 
-    // Background rounded rect
-    let rect = NSRect(x: 0, y: 0, width: s, height: s)
-    let cornerRadius = s * cornerRadiusFraction
+    // Background rounded rect — inset to match macOS icon grid
+    let inset = s * 0.05
+    let rect = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
+    let cornerRadius = (s - inset * 2) * cornerRadiusFraction
     let bgPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
     bgColor.setFill()
     bgPath.fill()
 
-    // --- Geometry (from Resources/icon.svg, converted to CG coords) ---
-    let pad = s * 0.1625
+    // Subtle border (like Ghostty / Activity Monitor)
+    let borderColor = NSColor(white: 1.0, alpha: 0.15)
+    borderColor.setStroke()
+    bgPath.lineWidth = max(s * 0.006, 0.5)
+    bgPath.stroke()
 
-    // X line endpoints
-    let topLeft     = CGPoint(x: pad,     y: s - pad)
-    let topRight    = CGPoint(x: s - pad, y: s - pad)
-    let bottomLeft  = CGPoint(x: pad,     y: pad)
-    let bottomRight = CGPoint(x: s - pad, y: pad)
+    // --- Geometry (from Resources/icon.svg, scaled to fit inset rect) ---
+    let inner = s - inset * 2
+    let pad = inner * 0.1625
+
+    // X line endpoints (relative to inset origin)
+    let topLeft     = CGPoint(x: inset + pad,         y: inset + inner - pad)
+    let topRight    = CGPoint(x: inset + inner - pad,  y: inset + inner - pad)
+    let bottomLeft  = CGPoint(x: inset + pad,         y: inset + pad)
+    let bottomRight = CGPoint(x: inset + inner - pad,  y: inset + pad)
 
     // Triangle vertices — apex at center, base below
-    let triApex      = CGPoint(x: s * 0.5,   y: s * 0.5)
-    let triBaseLeft  = CGPoint(x: s * 0.246,  y: s * 0.277)
-    let triBaseRight = CGPoint(x: s * 0.754,  y: s * 0.277)
+    let cx = s * 0.5
+    let triApex      = CGPoint(x: cx,                      y: inset + inner * 0.5)
+    let triBaseLeft  = CGPoint(x: inset + inner * 0.246,    y: inset + inner * 0.277)
+    let triBaseRight = CGPoint(x: inset + inner * 0.754,    y: inset + inner * 0.277)
 
     // --- 1. Triangle (behind X) ---
     fgColor.setFill()
@@ -74,7 +83,7 @@ func renderIcon(size: Int) -> NSImage {
     tri.fill()
 
     // --- 2. X lines (on top) ---
-    let lineWidth = max(s * 0.0586, 1.0)
+    let lineWidth = max(inner * 0.0586, 1.0)
     fgColor.setStroke()
 
     let xPath = NSBezierPath()
